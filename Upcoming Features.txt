@@ -1,0 +1,30 @@
+🔧 Multi-Mortar Coordination Tool Features
+1. Multiple Mortar Inputs
+Allow users to enter up to 4 mortar positions.
+
+Each mortar gets a unique identifier (e.g., M1, M2, M3, M4).
+
+Each mortar can have its own elevation and ammo type/charge (if needed).
+
+2. Shared Target Selection
+Single or multiple target positions can be set.
+
+Optional: Assign different mortars to different targets for simultaneous fire missions.
+
+3. Auto-Fire Synchronization
+Calculate staggered fire solutions so all rounds land within a synchronized time window (based on Time of Flight).
+
+Highlight ideal charge selection per mortar to achieve synchronicity.
+
+4. Spread & Zone Coverage Tool
+Show recommended grid dispersions for area denial (e.g., stagger grid spacing in a line or box formation).
+
+Automatic offset calculations for mortar teams to cover a wider kill zone.
+
+5. Visual Output (Optional but Powerful)
+Generate a simple mini-map overlay (grid only) using HTML Canvas or SVG to display mortar and target positions.
+
+6. Save / Load Fire Plans
+Ability to export a coordination plan as text and copy to clipboard.
+
+Include mortar grids, direction, range, elevation, ToF, and synchronized fire notes.

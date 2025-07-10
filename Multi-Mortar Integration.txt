@@ -1,0 +1,52 @@
+🔧 Feature Overview: Multi-Mortar Coordination Tool
+A dedicated panel that helps spotters or fire direction centers (FDC) coordinate simultaneous fire missions across 2–4 mortars.
+
+🧩 Core Features
+Add Multiple Mortars
+
+Each mortar has a unique name/callsign.
+
+Inputs for each:
+
+Position grid (e.g., 042024)
+
+Elevation
+
+Assigned charge and ammo type
+
+Shared Target Input
+
+One shared target grid and elevation.
+
+Shared ammo type and base fire mission.
+
+Individual Calculations
+
+Each mortar auto-calculates:
+
+Range
+
+Direction
+
+Required elevation
+
+Includes interpolated firing data.
+
+Staggered Fire Options (Optional toggle)
+
+Adds firing delay (e.g., 2–5 seconds between mortars) to simulate walking fire or bracketing.
+
+Group Fire Log
+
+Log the entire coordinated fire mission.
+
+Shows firing data for all mortars.
+
+Option to export or copy the coordinated mission.
+
+🧱 Suggested UI Integration
+New "Multi-Mortar Coordination" section in its own column or beneath "Recent Fire Missions."
+
+Input grid looks like a spreadsheet with:
+
+Mortar Name | Mortar Grid | Mortar Elev | Range | Direction | Elevation | Time of Flight
