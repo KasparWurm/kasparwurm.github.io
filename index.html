@@ -682,7 +682,7 @@
 
             const newGrid = `${String(Math.floor(newX / 100)).padStart(3, '0')}${String(Math.floor(newY / 100)).padStart(3, '0')}`;
 
-            let correctedMils = Math.round((correctedAngleRad * 1600) / Math.PI);
+            let correctedMils = Math.round((correctedAngleRad * 3200) / Math.PI);
             if (correctedMils < 0) correctedMils += 6400;
 
             const ammoType = document.getElementById('ammoType').value.toUpperCase();
