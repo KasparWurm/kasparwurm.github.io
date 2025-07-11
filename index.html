@@ -1,6 +1,8 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#feda6a">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Arma Reforger Mortar Calculator</title>
@@ -121,6 +123,7 @@
                 font-size: 12px;
                 padding: 4px 8px;
             }
+
         @media (max-width: 900px) {
             body {
                 grid-template-columns: 1fr;
@@ -651,11 +654,17 @@
             const opt3 = document.getElementById('opt3');
             const opt5 = document.getElementById('opt5');
 
-            let result = `Mortar Grid: ${mortarGrid}\nTarget Grid: ${targetGrid}\nAmmo: ${ammoType}\nCharge: ${charge}\nRange: ${range} meters\nDirection: ${direction} mils`;
+            let result = `Mortar Grid: ${mortarGrid}
+            Target Grid: ${targetGrid}
+            Ammo: ${ammoType}
+            Charge: ${charge}
+            Range: ${range} meters
+            Direction: ${direction} mils`;
             if (opt2 && opt2.checked) result += `(${degrees}°)`;
             if (opt3 && opt3.checked) result += `${bearing}`;
-            result += `\nElevation: ${interp.elevation} mils`;
-            if (opt5 && opt5.checked) result += `\nTime of Flight: ${interp.tof}s`;
+            result += `
+            Elevation: ${interp.elevation} mils
+            Time of Flight: ${interp.tof}s`;
 
             addLogEntry(`[RANGING SHOT]\n${result}`);
         }
@@ -741,12 +750,19 @@
             if (direction === 'L' || direction === 'R') {
                 output += `Correction: ${direction} ${value}m\n`;
                 output += `New Direction: ${correctedMils} mils\n`;
+                output += `Charge: ${charge}\n`;
                 output += `Adjusted Target Grid: ${newGrid}`;
+                if (interp) output += `\nTime of Flight: ${interp.tof}s`;
             } else {
                 output += `Correction: ${direction} ${value}m\n`;
                 output += `Corrected Range: ${Math.round(correctedDistance)}m\n`;
-                if (interp) output += `New Elevation: ${interp.elevation} mils\n`;
-                else output += `New range is outside table bounds.\n`;
+                if (interp) {
+                    output += `New Elevation: ${interp.elevation} mils\n`;
+                    output += `Charge: ${charge}\n`;
+                    output += `Time of Flight: ${interp.tof}s\n`;
+                } else {
+                    output += `New range is outside table bounds.\n`;
+                }
                 output += `Adjusted Target Grid: ${newGrid}`;
             }
 
@@ -773,6 +789,14 @@
             updateViewerCharges();
             document.getElementById('viewerCharge').addEventListener('change', updateFiringTableViewer);
         });
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', function () {
+                navigator.serviceWorker.register('service-worker.js')
+                    .then(function (reg) {
+                        console.log('Service worker registered.', reg);
+                    });
+            });
+        }
     </script>
 </body>
 </html>
