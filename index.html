@@ -121,6 +121,47 @@
                 font-size: 12px;
                 padding: 4px 8px;
             }
+        @media (max-width: 900px) {
+            body {
+                grid-template-columns: 1fr;
+                padding: 8px;
+                gap: 8px;
+            }
+
+            .calculator,
+            .log-section,
+            .options-section,
+            .table-view {
+                grid-column: 1 !important;
+                width: 100%;
+                min-width: 0;
+            }
+
+            .section {
+                margin-bottom: 12px;
+                padding: 10px;
+            }
+
+            input, select {
+                width: 100%;
+                font-size: 16px;
+            }
+
+            button {
+                width: 100%;
+                margin-right: 0;
+                margin-bottom: 8px;
+            }
+
+            .log-buttons {
+                flex-direction: column;
+                gap: 4px;
+            }
+
+            table {
+                font-size: 14px;
+            }
+        }
     </style>
 </head>
 <body>
@@ -135,13 +176,11 @@
         <label for="targetElev">Target Elevation (meters)</label>
         <input type="number" id="targetElev" placeholder="10">
         <label for="ammoType">Ammo Type</label>
-        <select id="ammoType" onchange="updateChargeOptions()">
+        <select id="ammoType">
             <option value="HE">HE</option>
             <option value="Smoke">Smoke</option>
             <option value="Illumination">Illumination</option>
         </select>
-        <label for="charge">Charge</label>
-        <select id="charge"></select>
         <button onclick="calculateFireData()">Calculate</button>
         <h3>Spotter Correction</h3>
         <label for="correctionDir">Correction Direction</label>
@@ -177,12 +216,12 @@
       </label>
       </div>
       -->
-    </div>
+
     <div class="section log">
         <h2>Recent Fire Missions</h2>
         <div id="logContainer"></div>
     </div>
-    </div>
+
 
     <div class="options-section">
         <div class="section example">
@@ -221,7 +260,7 @@
             <tbody></tbody>
         </table>
     </div>
-    </div>
+
 
     <script>
         const firingTables = {
@@ -484,22 +523,19 @@
             const logText = btn.parentElement.previousSibling.textContent;
             const lines = logText.split("\n");
 
-            let mortarGrid, targetGrid, ammoType, charge;
+            let mortarGrid, targetGrid, ammoType;
 
             lines.forEach(line => {
                 if (line.includes("Mortar Grid:")) mortarGrid = line.split(": ")[1];
                 if (line.includes("Target Grid:")) targetGrid = line.split(": ")[1];
                 if (line.includes("Ammo:")) ammoType = line.split(": ")[1];
-                if (line.includes("Charge:")) charge = line.split(": ")[1];
             });
 
             if (mortarGrid) document.getElementById('mortarPos').value = mortarGrid;
             if (targetGrid) document.getElementById('targetPos').value = targetGrid;
             if (ammoType) {
                 document.getElementById('ammoType').value = ammoType;
-                updateChargeOptions();
             }
-            if (charge) document.getElementById('charge').value = charge;
 
             // Automatically recalculate
             calculateFireData();
@@ -513,22 +549,6 @@
         function deleteLogEntry(btn) {
             const entry = btn.closest('.log-entry');
             entry.remove();
-        }
-
-        function updateChargeOptions() {
-            const ammoType = document.getElementById('ammoType').value;
-            const chargeSelect = document.getElementById('charge');
-            chargeSelect.innerHTML = '';
-            const charges = Object.keys(firingTables[ammoType.toUpperCase()] || {});
-            charges.forEach(charge => {
-                const option = document.createElement('option');
-                option.value = charge;
-                option.textContent = `Charge ${charge}`;
-                chargeSelect.appendChild(option);
-                if (charges.length) {
-                    chargeSelect.value = charges[4];
-                }
-            });
         }
 
         function gridToMeters(grid) {
@@ -568,21 +588,44 @@
             return null;
         }
 
+        function autoSelectCharge(ammoType, range) {
+            // Returns the best charge (string) for the given ammoType and range
+            const charges = Object.keys(firingTables[ammoType] || {});
+            let bestCharge = null;
+            let bestTof = Infinity;
+
+            for (let charge of charges) {
+                const table = firingTables[ammoType][charge];
+                if (table.length) {
+                    const minRange = table[0].range;
+                    const maxRange = table[table.length - 1].range;
+                    if (range >= minRange && range <= maxRange) {
+                        const interp = interpolate(table, range);
+                        if (interp && interp.tof < bestTof) {
+                            bestTof = interp.tof;
+                            bestCharge = charge;
+                        }
+                    }
+                }
+            }
+            return bestCharge;
+        }
+
         function calculateFireData() {
             console.log("Calculate button clicked");
 
             const mortarGrid = document.getElementById('mortarPos').value.trim();
             const targetGrid = document.getElementById('targetPos').value.trim();
             const ammoType = document.getElementById('ammoType').value.toUpperCase();
-            const charge = document.getElementById('charge').value;
             const mortarPos = gridToMeters(mortarGrid);
             const targetPos = gridToMeters(targetGrid);
             const range = calculateDistance(mortarPos, targetPos);
-            const direction = calculateDirection(mortarPos, targetPos);
+
+            const charge = autoSelectCharge(ammoType, range);
             const firingTable = firingTables[ammoType]?.[charge];
 
             if (!firingTable) {
-                document.getElementById('output').textContent = 'Firing table not found for this ammo/charge.';
+                alert('Firing table not found for this ammo/charge.');
                 return;
             }
 
@@ -592,7 +635,7 @@
 
 
             if (!interp) {
-                document.getElementById('output').textContent = 'Range out of bounds for selected charge.';
+                alert('Range out of bounds for selected charge.');
                 return;
             }
 
@@ -601,6 +644,7 @@
                 interp.elevation += verticalAdjustment;
             }
 
+            const direction = calculateDirection(mortarPos, targetPos);
             const degrees = (direction * 360 / 6400).toFixed(2);
             const bearing = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'][Math.round(direction / 800) % 8];
             const opt2 = document.getElementById('opt2');
@@ -644,13 +688,6 @@
         function applySpotterCorrection() {
             const direction = document.getElementById('correctionDir').value;
             const value = parseInt(document.getElementById('correctionValue').value);
-            if (value > baseDistance) {
-                alert("Correction value exceeds distance to target — too large for angle adjustment.");
-                return;
-            if (isNaN(value)) {
-                alert('Enter a valid correction value.');
-                return;
-            }
 
             const mortarGrid = document.getElementById('mortarPos').value.trim();
             const targetGrid = document.getElementById('targetPos').value.trim();
@@ -660,13 +697,21 @@
             const dx = targetPos.x - mortarPos.x;
             const dy = targetPos.y - mortarPos.y;
             const baseDistance = Math.sqrt(dx * dx + dy * dy);
-            const baseAngleRad = Math.atan2(dx, dy); // Use same convention as calculateDirection()
+            const baseAngleRad = Math.atan2(dx, dy);
+
+            if (value > baseDistance) {
+                alert("Correction value exceeds distance to target — too large for angle adjustment.");
+                return;
+            }
+            if (isNaN(value)) {
+                alert('Enter a valid correction value.');
+                return;
+            }
 
             let correctedDistance = baseDistance;
             let correctedAngleRad = baseAngleRad;
 
             if (direction === 'L' || direction === 'R') {
-                // Calculate angular offset using arctangent for realistic mils
                 const angleRadOffset = Math.atan(value / baseDistance);
                 correctedAngleRad = baseAngleRad + (direction === 'L' ? -angleRadOffset : angleRadOffset);
             } else if (direction === 'A' || direction === 'D') {
@@ -682,11 +727,12 @@
 
             const newGrid = `${String(Math.floor(newX / 100)).padStart(3, '0')}${String(Math.floor(newY / 100)).padStart(3, '0')}`;
 
-            let correctedMils = Math.round((correctedAngleRad * 1600) / Math.PI);
+            let correctedMils = Math.round((correctedAngleRad * 3200) / Math.PI);
             if (correctedMils < 0) correctedMils += 6400;
 
             const ammoType = document.getElementById('ammoType').value.toUpperCase();
-            const charge = document.getElementById('charge').value;
+            // Auto-select charge for the corrected distance
+            const charge = autoSelectCharge(ammoType, Math.round(correctedDistance));
             const firingTable = firingTables[ammoType]?.[charge];
             const interp = interpolate(firingTable, Math.round(correctedDistance));
 
@@ -723,11 +769,7 @@
             });
         }
 
-        // On load: initialize charges
-        window.onload = updateChargeOptions;
-
         document.addEventListener('DOMContentLoaded', () => {
-            updateChargeOptions();
             updateViewerCharges();
             document.getElementById('viewerCharge').addEventListener('change', updateFiringTableViewer);
         });
