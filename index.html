@@ -663,8 +663,9 @@
             let correctedAngleRad = baseAngleRad;
 
             if (direction === 'L' || direction === 'R') {
-                const offsetAngle = (direction === 'L' ? -1 : 1) * (value / baseDistance); // radian offset
-                correctedAngleRad = baseAngleRad + offsetAngle;
+                // Calculate angular offset using arctangent for realistic mils
+                const angleRadOffset = Math.atan(value / baseDistance);
+                correctedAngleRad = baseAngleRad + (direction === 'L' ? -angleRadOffset : angleRadOffset);
             } else if (direction === 'A' || direction === 'D') {
                 const offsetDist = (direction === 'A' ? 1 : -1) * value;
                 correctedDistance += offsetDist;
