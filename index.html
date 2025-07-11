@@ -644,6 +644,9 @@
         function applySpotterCorrection() {
             const direction = document.getElementById('correctionDir').value;
             const value = parseInt(document.getElementById('correctionValue').value);
+            if (value > baseDistance) {
+                alert("Correction value exceeds distance to target — too large for angle adjustment.");
+                return;
             if (isNaN(value)) {
                 alert('Enter a valid correction value.');
                 return;
