@@ -742,7 +742,7 @@
 
             if (direction === 'L' || direction === 'R') {
                 const angleRadOffset = Math.atan(value / baseDistance);
-                correctedAngleRad = baseAngleRad + (direction === 'L' ? -angleRadOffset : angleRadOffset);
+                correctedAngleRad = baseAngleRad + (direction === 'L' ? angleRadOffset : -angleRadOffset);
             } else if (direction === 'A') {
                 correctedDistance = baseDistance + value;
             } else if (direction === 'D') {
