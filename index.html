@@ -170,12 +170,12 @@
 <body>
     <div class="calculator section">
         <h2>Mortar Calculator</h2>
-        <label for="mortarPos">Mortar Position (grid format, e.g., 042024)</label>
-        <input type="text" id="mortarPos" placeholder="042024">
+        <label for="mortarPos">Mortar Position (grid format, e.g., 04200240)</label>
+        <input type="text" id="mortarPos" placeholder="04200240">
         <label for="mortarElev">Mortar Elevation (meters)</label>
         <input type="number" id="mortarElev" placeholder="40">
-        <label for="targetPos">Target Position (grid format, e.g., 043027)</label>
-        <input type="text" id="targetPos" placeholder="043027">
+        <label for="targetPos">Target Position (grid format, e.g., 04300270)</label>
+        <input type="text" id="targetPos" placeholder="04300270">
         <label for="targetElev">Target Elevation (meters)</label>
         <input type="number" id="targetElev" placeholder="10">
         <label for="ammoType">Ammo Type</label>
@@ -230,8 +230,8 @@
         <div class="section example">
             <h2>Example Fire Mission</h2>
             <p>
-                <strong>Mortar Grid:</strong> 042024<br>
-                <strong>Target Grid:</strong> 043027<br>
+                <strong>Mortar Grid:</strong> 04200240<br>
+                <strong>Target Grid:</strong> 04300270<br>
                 <strong>Ammo:</strong> HE
             </p>
             <p>
@@ -555,9 +555,9 @@
         }
 
         function gridToMeters(grid) {
-            if (!/^\d{6}$/.test(grid)) return { x: 0, y: 0 }; // fallback or throw error
-            const easting = parseInt(grid.slice(0, 3)) * 100;
-            const northing = parseInt(grid.slice(3, 6)) * 100;
+            if (!/^\d{8}$/.test(grid)) return { x: 0, y: 0 }; // fallback or throw error
+            const easting = parseInt(grid.slice(0, 4)) * 10;
+            const northing = parseInt(grid.slice(4, 8)) * 10;
             return { x: easting, y: northing };
         }
 
@@ -694,14 +694,53 @@
             updateFiringTableViewer(); // Load the first table immediately
         }
 
+        function getLastLogBaseGrids() {
+            // Find the most recent correction or ranging shot in the log
+            const logEntries = document.querySelectorAll('#logContainer .log-entry');
+            let lastCorrection = null;
+            let lastRanging = null;
+
+            for (let entry of logEntries) {
+                const text = entry.textContent;
+                if (!lastCorrection && text.includes('[CORRECTION]')) {
+                    // Try to extract the Adjusted Target Grid and Mortar Grid from the correction
+                    const mortarMatch = text.match(/Mortar Grid:\s*([0-9]{8})/);
+                    const targetMatch = text.match(/Adjusted Target Grid:\s*([0-9]{8})/);
+                    if (mortarMatch && targetMatch) {
+                        lastCorrection = {
+                            mortarGrid: mortarMatch[1],
+                            targetGrid: targetMatch[1]
+                        };
+                        break; // Most recent correction found
+                    }
+                }
+                if (!lastRanging && text.includes('[RANGING SHOT]')) {
+                    // Try to extract Mortar Grid and Target Grid from the ranging shot
+                    const mortarMatch = text.match(/Mortar Grid:\s*([0-9]{8})/);
+                    const targetMatch = text.match(/Target Grid:\s*([0-9]{8})/);
+                    if (mortarMatch && targetMatch) {
+                        lastRanging = {
+                            mortarGrid: mortarMatch[1],
+                            targetGrid: targetMatch[1]
+                        };
+                    }
+                }
+            }
+            // Prefer last correction, else last ranging shot, else nulls
+            return lastCorrection || lastRanging || { mortarGrid: '', targetGrid: '' };
+        }
+
         function applySpotterCorrection() {
             const direction = document.getElementById('correctionDir').value;
             const value = parseInt(document.getElementById('correctionValue').value);
 
-            const mortarGrid = document.getElementById('mortarPos').value.trim();
-            const targetGrid = document.getElementById('targetPos').value.trim();
-            const mortarPos = gridToMeters(mortarGrid);
-            const targetPos = gridToMeters(targetGrid);
+            // Use last correction if available, else last ranging shot, else current input
+            const { mortarGrid, targetGrid } = getLastLogBaseGrids();
+            const baseMortarGrid = mortarGrid || document.getElementById('mortarPos').value.trim();
+            const baseTargetGrid = targetGrid || document.getElementById('targetPos').value.trim();
+
+            const mortarPos = gridToMeters(baseMortarGrid);
+            const targetPos = gridToMeters(baseTargetGrid);
 
             const dx = targetPos.x - mortarPos.x;
             const dy = targetPos.y - mortarPos.y;
@@ -734,7 +773,7 @@
             const newX = Math.round(mortarPos.x + newDx);
             const newY = Math.round(mortarPos.y + newDy);
 
-            const newGrid = `${String(Math.floor(newX / 100)).padStart(3, '0')}${String(Math.floor(newY / 100)).padStart(3, '0')}`;
+            const newGrid = `${String(Math.floor(newX / 10)).padStart(4, '0')}${String(Math.floor(newY / 10)).padStart(4, '0')}`;
 
             let correctedMils = Math.round((correctedAngleRad * 3200) / Math.PI);
             if (correctedMils < 0) correctedMils += 6400;
@@ -745,7 +784,9 @@
             const firingTable = firingTables[ammoType]?.[charge];
             const interp = interpolate(firingTable, Math.round(correctedDistance));
 
-            let output = `Base Range: ${Math.round(baseDistance)}m, Direction: ${calculateDirection(mortarPos, targetPos)} mils\n`;
+            let output = `Mortar Grid: ${baseMortarGrid}\n`;
+            output += `Base Target Grid: ${baseTargetGrid}\n`;
+            output += `Base Range: ${Math.round(baseDistance)}m, Direction: ${calculateDirection(mortarPos, targetPos)} mils\n`;
 
             if (direction === 'L' || direction === 'R') {
                 output += `Correction: ${direction} ${value}m\n`;
