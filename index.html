@@ -247,6 +247,9 @@
 
 
     <script>
+        let originalFireSolution = null;
+let cumulativeAngleOffset = 0; // radians
+let cumulativeRangeOffset = 0; // meters
         const firingTables = {
             HE: {
                 0: [
@@ -486,6 +489,7 @@
                 ]
             }
         };
+
         function addLogEntry(data) {
             const container = document.getElementById('logContainer');
             const entry = document.createElement('div');
@@ -627,6 +631,19 @@
                 const verticalAdjustment = Math.round((targetElev - mortarElev) * 1.5);
                 interp.elevation += verticalAdjustment;
             }
+            const dx = targetPos.x - mortarPos.x;
+            const dy = targetPos.y - mortarPos.y;
+            const baseAngleRad = Math.atan2(dx, dy);
+            const baseDistance = Math.sqrt(dx * dx + dy * dy);
+
+            originalFireSolution = {
+                mortarPos: { x: mortarPos.x, y: mortarPos.y },
+                baseAngleRad: baseAngleRad,
+                baseDistance: baseDistance,
+                mortarGrid: mortarGrid
+            };
+            cumulativeAngleOffset = 0;
+            cumulativeRangeOffset = 0;
 
             const direction = calculateDirection(mortarPos, targetPos);
             const degrees = (direction * 360 / 6400).toFixed(2);
@@ -707,49 +724,53 @@
                     }
                 }
             }
-            // Prefer last correction, else last ranging shot, else nulls
-            return lastCorrection || lastRanging || { mortarGrid: '', targetGrid: '' };
+            // Prefer last correction, else last ranging shot, else current input
+            return lastCorrection || lastRanging || {
+                mortarGrid: document.getElementById('mortarPos').value.trim(),
+                targetGrid: document.getElementById('targetPos').value.trim()
+            };
         }
 
         function applySpotterCorrection() {
             const direction = document.getElementById('correctionDir').value;
             const value = parseInt(document.getElementById('correctionValue').value);
 
-            // Use last correction if available, else last ranging shot, else current input
-            const { mortarGrid, targetGrid } = getLastLogBaseGrids();
-            const baseMortarGrid = mortarGrid || document.getElementById('mortarPos').value.trim();
-            const baseTargetGrid = targetGrid || document.getElementById('targetPos').value.trim();
-
-            const mortarPos = gridToMeters(baseMortarGrid);
-            const targetPos = gridToMeters(baseTargetGrid);
-
-            const dx = targetPos.x - mortarPos.x;
-            const dy = targetPos.y - mortarPos.y;
-            const baseDistance = Math.sqrt(dx * dx + dy * dy);
-            const baseAngleRad = Math.atan2(dy, dx);
-
-            if (value > baseDistance) {
-                alert("Correction value exceeds distance to target — too large for angle adjustment.");
-                return;
-            }
-            if (isNaN(value)) {
-                alert('Enter a valid correction value.');
+            if (!originalFireSolution) {
+                alert('No ranging shot found. Please calculate a fire mission first.');
                 return;
             }
 
-            let correctedDistance = baseDistance;
-            let correctedAngleRad = baseAngleRad;
+            const mortarPos = originalFireSolution.mortarPos;
+            let baseAngleRad = originalFireSolution.baseAngleRad;
+            let baseDistance = originalFireSolution.baseDistance;
 
+            // Validate
+            if (isNaN(value) || value <= 0) {
+                alert('Enter a valid positive correction value.');
+                return;
+            }
+            if ((direction === 'L' || direction === 'R') && value > baseDistance * 0.5) {
+                alert("Correction value is too large for the distance. Use a smaller correction.");
+                return;
+            }
+
+            // Apply cumulative corrections
+            let milChange = 0;
+            let angleRadOffset = 0;
             if (direction === 'L' || direction === 'R') {
-                const angleRadOffset = Math.atan(value / baseDistance);
-                correctedAngleRad = baseAngleRad + (direction === 'L' ? angleRadOffset : -angleRadOffset);
+                milChange = value / baseDistance * 1000;
+                angleRadOffset = (milChange * Math.PI) / 3200;
+                cumulativeAngleOffset += (direction === 'R' ? angleRadOffset : -angleRadOffset);
             } else if (direction === 'A') {
-                correctedDistance = baseDistance + value;
+                cumulativeRangeOffset += value;
             } else if (direction === 'D') {
-                correctedDistance = baseDistance - value;
+                cumulativeRangeOffset -= value;
             }
 
-            // Calculate new target position for display
+            // Calculate new impact point
+            const correctedAngleRad = baseAngleRad + cumulativeAngleOffset;
+            const correctedDistance = baseDistance + cumulativeRangeOffset;
+
             const newDx = Math.cos(correctedAngleRad) * correctedDistance;
             const newDy = Math.sin(correctedAngleRad) * correctedDistance;
             const newX = Math.round(mortarPos.x + newDx);
@@ -761,7 +782,6 @@
             if (correctedMils < 0) correctedMils += 6400;
 
             const ammoType = document.getElementById('ammoType').value.toUpperCase();
-            // Auto-select charge for the corrected distance
             const charge = autoSelectCharge(ammoType, Math.round(correctedDistance));
             const firingTable = firingTables[ammoType]?.[charge];
             const interp = interpolate(firingTable, Math.round(correctedDistance));
@@ -774,12 +794,13 @@
                 interp.elevation += verticalAdjustment;
             }
 
-            let output = `Mortar Grid: ${baseMortarGrid}\n`;
-            output += `Base Target Grid: ${baseTargetGrid}\n`;
-            output += `Base Range: ${Math.round(baseDistance)}m, Direction: ${calculateDirection(mortarPos, targetPos)} mils\n`;
+            let output = `Mortar Grid: ${originalFireSolution.mortarGrid}\n`;
+            output += `Base Target Grid: ${newGrid}\n`;
+            output += `Base Range: ${Math.round(correctedDistance)}m, Direction: ${correctedMils} mils\n`;
 
             if (direction === 'L' || direction === 'R') {
-                output += `Correction: ${direction} ${value}m\n`;
+                const milChangeDisplay = Math.round(milChange);
+                output += `Correction: ${direction} ${value}m (${milChangeDisplay} mils)\n`;
                 output += `New Direction: ${correctedMils} mils\n`;
                 output += `Charge: ${charge}\n`;
                 output += `Adjusted Target Grid: ${newGrid}`;
