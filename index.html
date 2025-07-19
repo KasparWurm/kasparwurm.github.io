@@ -220,7 +220,7 @@
                 <strong>Elevation:</strong> 1126 mils<br>
                 <strong>Time of Flight:</strong> 12.1s<br>
             </p>
-            <p>This means you should fire using Charge 0, Elevation set at 1126 mils, & Direction set to 0328 mils. Adjust for dispersion after observing the impact.</p>
+            <p>This means you should fire using Charge 3 with elevation set at 1534 mils. Adjust for dispersion after observing the impact.</p>
         </div>
     </div>
 
@@ -247,8 +247,8 @@
 
     <script>
         let originalFireSolution = null;
-let cumulativeAngleOffset = 0; // radians
-let cumulativeRangeOffset = 0; // meters
+        let cumulativeAngleOffset = 0; // radians
+        let cumulativeRangeOffset = 0; // meters
         const firingTables = {
             HE: {
                 0: [
@@ -495,14 +495,14 @@ let cumulativeRangeOffset = 0; // meters
             entry.className = 'log-entry';
             const timestamp = new Date().toLocaleString();
             entry.innerHTML = `
-              <strong>[${timestamp}]</strong><br>
-              ${data.replace(/\n/g, '<br>')}
-              <div class="log-buttons">
-                <button onclick="replayMission(this)">Replay</button>
-                <button onclick="copyToClipboard(this)">Copy</button>
-                <button onclick="deleteLogEntry(this)">Delete</button>
-              </div>
-            `;
+                  <strong>[${timestamp}]</strong><br>
+                  ${data.replace(/\n/g, '<br>')}
+                  <div class="log-buttons">
+                    <button onclick="replayMission(this)">Replay</button>
+                    <button onclick="copyToClipboard(this)">Copy</button>
+                    <button onclick="deleteLogEntry(this)">Delete</button>
+                  </div>
+                `;
             container.prepend(entry);
         }
 
@@ -652,16 +652,16 @@ let cumulativeRangeOffset = 0; // meters
             const opt5 = document.getElementById('opt5');
 
             let result = `Mortar Grid: ${mortarGrid}
-            Target Grid: ${targetGrid}
-            Ammo: ${ammoType}
-            Charge: ${charge}
-            Range: ${range} meters
-            Direction: ${direction} mils`;
+                Target Grid: ${targetGrid}
+                Ammo: ${ammoType}
+                Charge: ${charge}
+                Range: ${range} meters
+                Direction: ${direction} mils`;
             if (opt2 && opt2.checked) result += `(${degrees}°)`;
             if (opt3 && opt3.checked) result += `${bearing}`;
             result += `
-            Elevation: ${interp.elevation} mils
-            Time of Flight: ${interp.tof}s`;
+                Elevation: ${interp.elevation} mils
+                Time of Flight: ${interp.tof}s`;
 
             addLogEntry(`[RANGING SHOT]\n${result}`);
         }
