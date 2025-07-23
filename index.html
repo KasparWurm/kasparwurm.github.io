@@ -761,16 +761,16 @@
             const opt5 = document.getElementById('opt5');
 
             let result = `Mortar Grid: ${mortarGrid}
-                                            Target Grid: ${targetGrid}
-                                            Ammo: ${ammoType}
-                                            Charge: ${charge}
-                                            Range: ${range} meters
-                                            Direction: ${direction} mils`;
+                Target Grid: ${targetGrid}
+                Ammo: ${ammoType}
+                Charge: ${charge}
+                Range: ${range} meters
+                Direction: ${direction} mils`;
             if (opt2 && opt2.checked) result += `(${degrees}°)`;
             if (opt3 && opt3.checked) result += `${bearing}`;
             result += `
-                                            Elevation: ${interp.elevation} mils
-                                            Time of Flight: ${interp.tof}s`;
+                Elevation: ${interp.elevation} mils
+                Time of Flight: ${interp.tof.toFixed(2)}s`;
 
             addLogEntry(`[RANGING SHOT]\n${result}`);
         }
@@ -909,14 +909,14 @@
                 output += `New Direction: ${correctedMils} mils\n`;
                 output += `Charge: ${charge}\n`;
                 output += `Adjusted Target Grid: ${newGrid}`;
-                if (interp) output += `\nTime of Flight: ${interp.tof}s`;
+                if (interp) output += `\nTime of Flight: ${interp.tof.toFixed(2)}s`;
             } else {
                 output += `Correction: ${direction} ${value}m\n`;
                 output += `Corrected Range: ${Math.round(correctedDistance)}m\n`;
                 if (interp) {
                     output += `New Elevation: ${interp.elevation} mils\n`;
                     output += `Charge: ${charge}\n`;
-                    output += `Time of Flight: ${interp.tof}s\n`;
+                    output += `Time of Flight: ${interp.tof.toFixed(2)}s\n`;
                 } else {
                     output += `New range is outside table bounds.\n`;
                 }
