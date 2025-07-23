@@ -203,112 +203,113 @@
         <button onclick="applySpotterCorrection()">Apply Correction</button>
 
     </div>
-    
+
     <div class="section log">
         <h2>Recent Fire Missions</h2>
         <div id="logContainer"></div>
     </div>
 
+    <div id="helpOverlay" style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(30,30,30,0.98); z-index:9999; overflow:auto; padding:40px;">
+        <div class="options-section">
+            <button id="helpToggleBtn" style="position:fixed;top:20px;right:20px;z-index:1000;">Help</button>
+            <div class="section example">
+                <h2>Example Fire Mission</h2>
+                <p>
+                    <strong>Mortar Grid:</strong> 04200240<br>
+                    <strong>Target Grid:</strong> 04300270<br>
+                    <strong>Ammo:</strong> HE
+                </p>
+                <p>
+                    <strong>Calculated Range:</strong> ~316 meters<br>
+                    <strong>Direction:</strong> 1778 mils (100.00°)<br>
+                    <strong>Elevation:</strong> 1534 mils<br>
+                    <strong>Charge:</strong> 3
+                </p>
+                <p>This means you should fire using Charge 3 with elevation set at 1534 mils. Adjust for dispersion after observing the impact.</p>
+            </div>
+        </div>
 
-    <div class="options-section">
-        <div class="section example">
-            <h2>Example Fire Mission</h2>
+        <div class="section table-view" style="grid-column: 4;">
+            <h2>Firing Table Viewer</h2>
+            <label for="viewerAmmo">Ammo Type</label>
+            <select id="viewerAmmo" onchange="updateViewerCharges()">
+                <option value="HE">HE</option>
+                <option value="SMOKE">SMOKE</option>
+                <option value="ILLUMINATION">ILLUMINATION</option>
+            </select>
+
+            <label for="viewerCharge">Charge</label>
+            <select id="viewerCharge"></select>
+
+            <table id="firingTableViewer" border="1" style="width: 100%; margin-top: 10px;">
+                <thead>
+                    <tr><th>Range</th><th>Elevation (mil)</th><th>Time of Flight (sec)</th></tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+
+        <div class="section" style="grid-column: 1;">
+            <h3>How are Elevation and Time of Flight Calculated?</h3>
+            <!-- Visual Diagram -->
+            <div style="text-align:center; margin-bottom: 16px;">
+                <svg width="320" height="100" viewBox="0 0 320 100" style="background:#222; border-radius:8px;">
+                    <!-- Ground line -->
+                    <line x1="20" y1="80" x2="300" y2="80" stroke="#feda6a" stroke-width="2" />
+                    <!-- Mortar -->
+                    <circle cx="60" cy="60" r="10" fill="#feda6a" />
+                    <text x="60" y="55" text-anchor="middle" fill="#feda6a" font-size="12">Mortar</text>
+                    <!-- Target (higher elevation) -->
+                    <circle cx="260" cy="40" r="10" fill="#d4d4dc" />
+                    <text x="260" y="35" text-anchor="middle" fill="#d4d4dc" font-size="12">Target</text>
+                    <!-- Elevation arrow -->
+                    <line x1="260" y1="80" x2="260" y2="40" stroke="#feda6a" stroke-width="2" marker-end="url(#arrowhead)" />
+                    <text x="265" y="60" fill="#feda6a" font-size="12" font-weight="bold">Elevation Difference</text>
+                    <!-- Arrowhead definition -->
+                    <defs>
+                        <marker id="arrowhead" markerWidth="6" markerHeight="6" refX="3" refY="3" orient="auto">
+                            <polygon points="0 0, 6 3, 0 6" fill="#feda6a" />
+                        </marker>
+                    </defs>
+                </svg>
+            </div>
             <p>
-                <strong>Mortar Grid:</strong> 04200240<br>
-                <strong>Target Grid:</strong> 04300270<br>
-                <strong>Ammo:</strong> HE
+                Accurate mortar fire requires adjusting for elevation differences between the mortar and the target. This calculator uses firing tables to make these adjustments automatically.
             </p>
-            <p>
-                <strong>Calculated Range:</strong> ~316 meters<br>
-                <strong>Direction:</strong> 1778 mils (100.00°)<br>
-                <strong>Elevation:</strong> 1534 mils<br>
-                <strong>Charge:</strong> 3
-            </p>
-            <p>This means you should fire using Charge 3 with elevation set at 1534 mils. Adjust for dispersion after observing the impact.</p>
+            <ul>
+                <li>
+                    <strong>Elevation Adjustment:</strong>
+                    <br>
+                    The difference in elevation between the target and mortar is multiplied by a table factor (<code>dElevPer100mDR</code>) to fine-tune the firing elevation.
+                    <br>
+                    <em>Example:</em> If the target is 20m higher than the mortar and the table factor is 15, the adjustment is <code>(20 / 100) × 15 = 3 mils</code>.
+                </li>
+                <li>
+                    <strong>Time of Flight Adjustment:</strong>
+                    <br>
+                    The calculator also adjusts the time of flight using the elevation difference and a table factor (<code>tofPer100mDR</code>).
+                    <br>
+                    <em>Example:</em> If the target is 20m higher and the table factor is 0.1, the adjustment is <code>(20 / 100) × 0.1 = 0.02 seconds</code>.
+                </li>
+                <li>
+                    <strong>Table Factors:</strong>
+                    <br>
+                    <code>dElevPer100mDR</code>: Elevation change per 100m elevation difference.<br>
+                    <code>tofPer100mDR</code>: Time of flight change per 100m elevation difference.
+                </li>
+                <li>
+                    If no adjustment factor is available, the base table value is used.
+                </li>
+            </ul>
+            <details>
+                <summary>Show full calculation formula</summary>
+                <pre>
+                    Elevation Adjustment = (Target Elevation - Mortar Elevation) / 100 × dElevPer100mDR
+                    Time of Flight Adjustment = (Target Elevation - Mortar Elevation) / 100 × tofPer100mDR
+    </pre>
+            </details>
         </div>
     </div>
-
-    <div class="section table-view" style="grid-column: 4;">
-        <h2>Firing Table Viewer</h2>
-        <label for="viewerAmmo">Ammo Type</label>
-        <select id="viewerAmmo" onchange="updateViewerCharges()">
-            <option value="HE">HE</option>
-            <option value="SMOKE">SMOKE</option>
-            <option value="ILLUMINATION">ILLUMINATION</option>
-        </select>
-
-        <label for="viewerCharge">Charge</label>
-        <select id="viewerCharge"></select>
-
-        <table id="firingTableViewer" border="1" style="width: 100%; margin-top: 10px;">
-            <thead>
-                <tr><th>Range</th><th>Elevation (mil)</th><th>Time of Flight (sec)</th></tr>
-            </thead>
-            <tbody></tbody>
-        </table>
-    </div>
-
-    <div class="section" style="grid-column: 1;">
-        <h3>How are Elevation and Time of Flight Calculated?</h3>
-        <!-- Visual Diagram -->
-        <div style="text-align:center; margin-bottom: 16px;">
-            <svg width="320" height="100" viewBox="0 0 320 100" style="background:#222; border-radius:8px;">
-                <!-- Ground line -->
-                <line x1="20" y1="80" x2="300" y2="80" stroke="#feda6a" stroke-width="2" />
-                <!-- Mortar -->
-                <circle cx="60" cy="60" r="10" fill="#feda6a" />
-                <text x="60" y="55" text-anchor="middle" fill="#feda6a" font-size="12">Mortar</text>
-                <!-- Target (higher elevation) -->
-                <circle cx="260" cy="40" r="10" fill="#d4d4dc" />
-                <text x="260" y="35" text-anchor="middle" fill="#d4d4dc" font-size="12">Target</text>
-                <!-- Elevation arrow -->
-                <line x1="260" y1="80" x2="260" y2="40" stroke="#feda6a" stroke-width="2" marker-end="url(#arrowhead)" />
-                <text x="265" y="60" fill="#feda6a" font-size="12" font-weight="bold">Elevation Difference</text>
-                <!-- Arrowhead definition -->
-                <defs>
-                    <marker id="arrowhead" markerWidth="6" markerHeight="6" refX="3" refY="3" orient="auto">
-                        <polygon points="0 0, 6 3, 0 6" fill="#feda6a" />
-                    </marker>
-                </defs>
-            </svg>
-        </div>
-        <p>
-            Accurate mortar fire requires adjusting for elevation differences between the mortar and the target. This calculator uses firing tables to make these adjustments automatically.
-        </p>
-        <ul>
-            <li>
-                <strong>Elevation Adjustment:</strong>
-                <br>
-                The difference in elevation between the target and mortar is multiplied by a table factor (<code>dElevPer100mDR</code>) to fine-tune the firing elevation.
-                <br>
-                <em>Example:</em> If the target is 20m higher than the mortar and the table factor is 15, the adjustment is <code>(20 / 100) × 15 = 3 mils</code>.
-            </li>
-            <li>
-                <strong>Time of Flight Adjustment:</strong>
-                <br>
-                The calculator also adjusts the time of flight using the elevation difference and a table factor (<code>tofPer100mDR</code>).
-                <br>
-                <em>Example:</em> If the target is 20m higher and the table factor is 0.1, the adjustment is <code>(20 / 100) × 0.1 = 0.02 seconds</code>.
-            </li>
-            <li>
-                <strong>Table Factors:</strong>
-                <br>
-                <code>dElevPer100mDR</code>: Elevation change per 100m elevation difference.<br>
-                <code>tofPer100mDR</code>: Time of flight change per 100m elevation difference.
-            </li>
-            <li>
-                If no adjustment factor is available, the base table value is used.
-            </li>
-        </ul>
-        <details>
-            <summary>Show full calculation formula</summary>
-            <pre>
-            Elevation Adjustment = (Target Elevation - Mortar Elevation) / 100 × dElevPer100mDR
-            Time of Flight Adjustment = (Target Elevation - Mortar Elevation) / 100 × tofPer100mDR
-        </pre>
-        </details>
-    </div>
-
 
     <script>
         const firingTables = {
@@ -556,14 +557,14 @@
             entry.className = 'log-entry';
             const timestamp = new Date().toLocaleString();
             entry.innerHTML = `
-                              <strong>[${timestamp}]</strong><br>
-                              ${data.replace(/\n/g, '<br>')}
-                              <div class="log-buttons">
-                                <button onclick="replayMission(this)">Replay</button>
-                                <button onclick="copyToClipboard(this)">Copy</button>
-                                <button onclick="deleteLogEntry(this)">Delete</button>
-                              </div>
-                            `;
+                                  <strong>[${timestamp}]</strong><br>
+                                  ${data.replace(/\n/g, '<br>')}
+                                  <div class="log-buttons">
+                                    <button onclick="replayMission(this)">Replay</button>
+                                    <button onclick="copyToClipboard(this)">Copy</button>
+                                    <button onclick="deleteLogEntry(this)">Delete</button>
+                                  </div>
+                                `;
             container.prepend(entry);
         }
 
@@ -711,16 +712,16 @@
             const opt5 = document.getElementById('opt5');
 
             let result = `Mortar Grid: ${mortarGrid}
-                            Target Grid: ${targetGrid}
-                            Ammo: ${ammoType}
-                            Charge: ${charge}
-                            Range: ${range} meters
-                            Direction: ${direction} mils`;
+                                Target Grid: ${targetGrid}
+                                Ammo: ${ammoType}
+                                Charge: ${charge}
+                                Range: ${range} meters
+                                Direction: ${direction} mils`;
             if (opt2 && opt2.checked) result += `(${degrees}°)`;
             if (opt3 && opt3.checked) result += `${bearing}`;
             result += `
-                            Elevation: ${interp.elevation} mils
-                            Time of Flight: ${interp.tof}s`;
+                                Elevation: ${interp.elevation} mils
+                                Time of Flight: ${interp.tof}s`;
 
             addLogEntry(`[RANGING SHOT]\n${result}`);
         }
@@ -905,6 +906,16 @@
             });
         }
 
+        document.getElementById('helpToggleBtn').addEventListener('click', function () {
+            const overlay = document.getElementById('helpOverlay');
+            if (overlay.style.display === 'none' || overlay.style.display === '') {
+                overlay.style.display = 'block';
+                this.textContent = 'Close Help';
+            } else {
+                overlay.style.display = 'none';
+                this.textContent = 'Help';
+            }
+        });
 
     </script>
 </body>
