@@ -25,6 +25,7 @@
             padding: 15px;
             border-radius: 8px;
             margin-bottom: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.18);
         }
 
         .calculator {
@@ -193,6 +194,17 @@
     </style>
 </head>
 <body>
+    <div class="section" style="grid-column: 4;">
+        <h2>Quick Reference</h2>
+        <ul>
+            <li><strong>Grid Format:</strong> 8 digits (e.g., 04200240)</li>
+            <li><strong>Elevation:</strong> Enter in meters</li>
+            <li><strong>Ammo Types:</strong> HE, Smoke, Illumination</li>
+            <li><strong>Corrections:</strong> Left/Right/Add/Drop</li>
+            <li><strong>Help:</strong> Click the Help button for detailed instructions</li>
+        </ul>
+    </div>
+
     <button id="helpToggleBtn" style="position:fixed;top:20px;right:20px;z-index:1000;">Help</button>
     <div class="calculator section">
         <h2>Mortar Calculator</h2>
@@ -237,7 +249,7 @@
 
     <div id="helpOverlay" style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(30,30,30,0.98); z-index:9999; overflow:auto; padding:40px;">
         <button id="closeHelpBtn" style="position:absolute;top:20px;right:80px;z-index:10001;">Close Help</button>
-        
+
         <div class="options-section">
             <div class="section example">
                 <h2>Example Fire Mission</h2>
@@ -270,7 +282,13 @@
 
             <table id="firingTableViewer" border="1" style="width: 100%; margin-top: 10px;">
                 <thead>
-                    <tr><th>Range</th><th>Elevation (mil)</th><th>Time of Flight (sec)</th></tr>
+                    <tr>
+                        <th>Range</th>
+                        <th>Elevation (mil)</th>
+                        <th>Time of Flight (sec)</th>
+                        <th>Elevation Adj/100m (mil)</th>
+                        <th>TOF Adj/100m (sec)</th>
+                    </tr>
                 </thead>
                 <tbody></tbody>
             </table>
@@ -337,6 +355,10 @@
             </details>
         </div>
     </div>
+    
+    <footer style="grid-column: 1 / span 4; text-align: center; margin-top: 40px; color: #888;">
+        &copy; 2025 Arma Reforger Mortar Calculator | <a href="https://github.com/yourrepo" style="color:#feda6a;">GitHub</a>
+    </footer>
 
     <script>
         const firingTables = {
@@ -584,14 +606,14 @@
             entry.className = 'log-entry';
             const timestamp = new Date().toLocaleString();
             entry.innerHTML = `
-                                  <strong>[${timestamp}]</strong><br>
-                                  ${data.replace(/\n/g, '<br>')}
-                                  <div class="log-buttons">
-                                    <button onclick="replayMission(this)">Replay</button>
-                                    <button onclick="copyToClipboard(this)">Copy</button>
-                                    <button onclick="deleteLogEntry(this)">Delete</button>
-                                  </div>
-                                `;
+                                          <strong>[${timestamp}]</strong><br>
+                                          ${data.replace(/\n/g, '<br>')}
+                                          <div class="log-buttons">
+                                            <button onclick="replayMission(this)">Replay</button>
+                                            <button onclick="copyToClipboard(this)">Copy</button>
+                                            <button onclick="deleteLogEntry(this)">Delete</button>
+                                          </div>
+                                        `;
             container.prepend(entry);
         }
 
@@ -739,16 +761,16 @@
             const opt5 = document.getElementById('opt5');
 
             let result = `Mortar Grid: ${mortarGrid}
-                                Target Grid: ${targetGrid}
-                                Ammo: ${ammoType}
-                                Charge: ${charge}
-                                Range: ${range} meters
-                                Direction: ${direction} mils`;
+                                        Target Grid: ${targetGrid}
+                                        Ammo: ${ammoType}
+                                        Charge: ${charge}
+                                        Range: ${range} meters
+                                        Direction: ${direction} mils`;
             if (opt2 && opt2.checked) result += `(${degrees}°)`;
             if (opt3 && opt3.checked) result += `${bearing}`;
             result += `
-                                Elevation: ${interp.elevation} mils
-                                Time of Flight: ${interp.tof}s`;
+                                        Elevation: ${interp.elevation} mils
+                                        Time of Flight: ${interp.tof}s`;
 
             addLogEntry(`[RANGING SHOT]\n${result}`);
         }
@@ -914,8 +936,14 @@
             if (!rows) return;
 
             rows.forEach(row => {
+                const elevAdj = row.dElevPer100mDR !== null ? row.dElevPer100mDR : '-';
+                const tofAdj = row.tofPer100mDR !== null ? row.tofPer100mDR : '-';
                 const tr = document.createElement('tr');
-                tr.innerHTML = `<td>${row.range}</td><td>${row.elevation}</td><td>${row.tof}</td>`;
+                tr.innerHTML = `<td>${row.range}</td>
+                                <td>${row.elevation}</td>
+                                <td>${row.tof}</td>
+                                <td>${elevAdj}</td>
+                                <td>${tofAdj}</td>`;
                 table.appendChild(tr);
             });
         }
