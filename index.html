@@ -5,8 +5,6 @@
     <meta name="theme-color" content="#feda6a">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
-    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
     <title>Arma Reforger Mortar Calculator</title>
     <style>
         body {
@@ -205,11 +203,7 @@
         <button onclick="applySpotterCorrection()">Apply Correction</button>
 
     </div>
-
-    <div id="map" style="height: 400px; width: 100%; grid-column: span 4; margin-bottom: 20px;">
-
-    </div>
-
+    
     <div class="section log">
         <h2>Recent Fire Missions</h2>
         <div id="logContainer"></div>
@@ -676,7 +670,6 @@
 
             const mortarGrid = document.getElementById('mortarPos').value.trim();
             const targetGrid = document.getElementById('targetPos').value.trim();
-            plotOnMap(mortarGrid, targetGrid);
             const ammoType = document.getElementById('ammoType').value.toUpperCase();
             const mortarPos = gridToMeters(mortarGrid);
             const targetPos = gridToMeters(targetGrid);
@@ -910,63 +903,6 @@
                         console.log('Service worker registered.', reg);
                     });
             });
-        }
-
-        // Set up a 10km x 10km grid (adjust as needed for your map size)
-        const mapBounds = [[0, 0], [10000, 10000]]; // [y, x] in meters
-
-        const map = L.map('map', {
-            crs: L.CRS.Simple,
-            minZoom: -2,
-            maxZoom: 2
-        }).setView([5000, 5000], 0);
-
-        L.rectangle(mapBounds, { color: "#feda6a", weight: 1, fill: false }).addTo(map);
-        map.fitBounds(mapBounds);
-
-        L.imageOverlay('anizay.png', mapBounds).addTo(map);
-
-        function drawGrid(spacing = 1000) {
-            for (let x = 0; x <= 10000; x += spacing) {
-                L.polyline([[0, x], [10000, x]], { color: '#feda6a', weight: 1, opacity: 0.3 }).addTo(map);
-            }
-            for (let y = 0; y <= 10000; y += spacing) {
-                L.polyline([[y, 0], [y, 10000]], { color: '#feda6a', weight: 1, opacity: 0.3 }).addTo(map);
-            }
-        }
-        drawGrid(1000); // 1km grid lines
-
-        function gridToLatLng(grid) {
-            // 8-digit grid: first 4 digits easting, last 4 digits northing, each *10 for meters
-            const easting = parseInt(grid.slice(0, 4)) * 10;
-            const northing = parseInt(grid.slice(4, 8)) * 10;
-            return [northing, easting]; // [y, x] for CRS.Simple
-        }
-
-        let mapMarkers = [];
-        let mapTrajectory = null;
-
-        function plotOnMap(mortarGrid, targetGrid) {
-            // Remove old markers/lines
-            mapMarkers.forEach(m => map.removeLayer(m));
-            mapMarkers = [];
-            if (mapTrajectory) {
-                map.removeLayer(mapTrajectory);
-                mapTrajectory = null;
-            }
-
-            const mortarLatLng = gridToLatLng(mortarGrid);
-            const targetLatLng = gridToLatLng(targetGrid);
-
-            // Add markers
-            mapMarkers.push(L.marker(mortarLatLng, { title: "Mortar" }).addTo(map).bindPopup('Mortar'));
-            mapMarkers.push(L.marker(targetLatLng, { title: "Target" }).addTo(map).bindPopup('Target'));
-
-            // Draw trajectory (straight line)
-            mapTrajectory = L.polyline([mortarLatLng, targetLatLng], { color: 'red', weight: 2 }).addTo(map);
-
-            // Optionally, fit map to show both points
-            map.fitBounds([mortarLatLng, targetLatLng], { padding: [50, 50] });
         }
 
 
