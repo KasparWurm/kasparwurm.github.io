@@ -256,6 +256,28 @@
 
     <div class="section" style="grid-column: 1;">
         <h3>How are Elevation and Time of Flight Calculated?</h3>
+        <!-- Visual Diagram -->
+        <div style="text-align:center; margin-bottom: 16px;">
+            <svg width="320" height="100" viewBox="0 0 320 100" style="background:#222; border-radius:8px;">
+                <!-- Ground line -->
+                <line x1="20" y1="80" x2="300" y2="80" stroke="#feda6a" stroke-width="2" />
+                <!-- Mortar -->
+                <circle cx="60" cy="60" r="10" fill="#feda6a" />
+                <text x="60" y="55" text-anchor="middle" fill="#feda6a" font-size="12">Mortar</text>
+                <!-- Target (higher elevation) -->
+                <circle cx="260" cy="40" r="10" fill="#d4d4dc" />
+                <text x="260" y="35" text-anchor="middle" fill="#d4d4dc" font-size="12">Target</text>
+                <!-- Elevation arrow -->
+                <line x1="260" y1="80" x2="260" y2="40" stroke="#feda6a" stroke-width="2" marker-end="url(#arrowhead)" />
+                <text x="265" y="60" fill="#feda6a" font-size="12" font-weight="bold">Elevation Difference</text>
+                <!-- Arrowhead definition -->
+                <defs>
+                    <marker id="arrowhead" markerWidth="6" markerHeight="6" refX="3" refY="3" orient="auto">
+                        <polygon points="0 0, 6 3, 0 6" fill="#feda6a" />
+                    </marker>
+                </defs>
+            </svg>
+        </div>
         <p>
             Accurate mortar fire requires adjusting for elevation differences between the mortar and the target. This calculator uses firing tables to make these adjustments automatically.
         </p>
@@ -287,8 +309,8 @@
         <details>
             <summary>Show full calculation formula</summary>
             <pre>
-                Elevation Adjustment = (Target Elevation - Mortar Elevation) / 100 × dElevPer100mDR
-                Time of Flight Adjustment = (Target Elevation - Mortar Elevation) / 100 × tofPer100mDR
+            Elevation Adjustment = (Target Elevation - Mortar Elevation) / 100 × dElevPer100mDR
+            Time of Flight Adjustment = (Target Elevation - Mortar Elevation) / 100 × tofPer100mDR
         </pre>
         </details>
     </div>
