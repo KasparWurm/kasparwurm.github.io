@@ -194,17 +194,6 @@
     </style>
 </head>
 <body>
-    <div class="section" style="grid-column: 3;">
-        <h2>Quick Reference</h2>
-        <ul>
-            <li><strong>Grid Format:</strong> 8 digits (e.g., 04200240)</li>
-            <li><strong>Elevation:</strong> Enter in meters</li>
-            <li><strong>Ammo Types:</strong> HE, Smoke, Illumination</li>
-            <li><strong>Corrections:</strong> Left/Right/Add/Drop</li>
-            <li><strong>Help:</strong> Click the Help button for detailed instructions</li>
-        </ul>
-    </div>
-
     <button id="helpToggleBtn" style="position:fixed;top:20px;right:20px;z-index:1000;">Help</button>
     <div class="calculator section">
         <h2>Mortar Calculator</h2>
@@ -245,6 +234,17 @@
     <div class="section log">
         <h2>Recent Fire Missions</h2>
         <div id="logContainer"></div>
+    </div>
+
+    <div class="section" style="grid-column: 3;">
+        <h2>Quick Reference</h2>
+        <ul>
+            <li><strong>Grid Format:</strong> 8 digits (e.g., 04200240)</li>
+            <li><strong>Elevation:</strong> Enter in meters</li>
+            <li><strong>Ammo Types:</strong> HE, Smoke, Illumination</li>
+            <li><strong>Corrections:</strong> Left/Right/Add/Drop</li>
+            <li><strong>Help:</strong> Click the Help button for detailed instructions</li>
+        </ul>
     </div>
 
     <div id="helpOverlay" style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(30,30,30,0.98); z-index:9999; overflow:auto; padding:40px;">
@@ -355,7 +355,7 @@
             </details>
         </div>
     </div>
-    
+
     <footer style="grid-column: 1 / span 3; text-align: center; margin-top: 40px; color: #888;">
         &copy; 2025 Arma Reforger Mortar Calculator | <a href="https://github.com/yourrepo" style="color:#feda6a;">GitHub</a>
     </footer>
@@ -606,14 +606,14 @@
             entry.className = 'log-entry';
             const timestamp = new Date().toLocaleString();
             entry.innerHTML = `
-                                          <strong>[${timestamp}]</strong><br>
-                                          ${data.replace(/\n/g, '<br>')}
-                                          <div class="log-buttons">
-                                            <button onclick="replayMission(this)">Replay</button>
-                                            <button onclick="copyToClipboard(this)">Copy</button>
-                                            <button onclick="deleteLogEntry(this)">Delete</button>
-                                          </div>
-                                        `;
+                                              <strong>[${timestamp}]</strong><br>
+                                              ${data.replace(/\n/g, '<br>')}
+                                              <div class="log-buttons">
+                                                <button onclick="replayMission(this)">Replay</button>
+                                                <button onclick="copyToClipboard(this)">Copy</button>
+                                                <button onclick="deleteLogEntry(this)">Delete</button>
+                                              </div>
+                                            `;
             container.prepend(entry);
         }
 
@@ -761,16 +761,16 @@
             const opt5 = document.getElementById('opt5');
 
             let result = `Mortar Grid: ${mortarGrid}
-                                        Target Grid: ${targetGrid}
-                                        Ammo: ${ammoType}
-                                        Charge: ${charge}
-                                        Range: ${range} meters
-                                        Direction: ${direction} mils`;
+                                            Target Grid: ${targetGrid}
+                                            Ammo: ${ammoType}
+                                            Charge: ${charge}
+                                            Range: ${range} meters
+                                            Direction: ${direction} mils`;
             if (opt2 && opt2.checked) result += `(${degrees}°)`;
             if (opt3 && opt3.checked) result += `${bearing}`;
             result += `
-                                        Elevation: ${interp.elevation} mils
-                                        Time of Flight: ${interp.tof}s`;
+                                            Elevation: ${interp.elevation} mils
+                                            Time of Flight: ${interp.tof}s`;
 
             addLogEntry(`[RANGING SHOT]\n${result}`);
         }
@@ -940,10 +940,10 @@
                 const tofAdj = row.tofPer100mDR !== null ? row.tofPer100mDR : '-';
                 const tr = document.createElement('tr');
                 tr.innerHTML = `<td>${row.range}</td>
-                                <td>${row.elevation}</td>
-                                <td>${row.tof}</td>
-                                <td>${elevAdj}</td>
-                                <td>${tofAdj}</td>`;
+                                    <td>${row.elevation}</td>
+                                    <td>${row.tof}</td>
+                                    <td>${elevAdj}</td>
+                                    <td>${tofAdj}</td>`;
                 table.appendChild(tr);
             });
         }
