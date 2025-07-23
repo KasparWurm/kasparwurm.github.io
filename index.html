@@ -5,6 +5,8 @@
     <meta name="theme-color" content="#feda6a">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
     <title>Arma Reforger Mortar Calculator</title>
     <style>
         body {
@@ -176,7 +178,10 @@
         <input type="number" id="mortarElev" placeholder="40">
         <label for="targetPos">Target Position (grid format, e.g., 04300270)</label>
         <input type="text" id="targetPos" placeholder="04300270">
-        <label for="targetElev">Target Elevation (meters)</label>
+        <label for="targetElev">
+            Target Elevation (meters)
+            <span title="Elevation adjustment uses the difference between target and mortar elevation, scaled by a factor from the firing table (dElevPer100mDR).">?</span>
+        </label>
         <input type="number" id="targetElev" placeholder="10">
         <label for="ammoType">Ammo Type</label>
         <select id="ammoType">
@@ -201,6 +206,10 @@
 
     </div>
 
+    <div id="map" style="height: 400px; width: 100%; grid-column: span 4; margin-bottom: 20px;">
+
+    </div>
+
     <div class="section log">
         <h2>Recent Fire Missions</h2>
         <div id="logContainer"></div>
@@ -213,13 +222,15 @@
             <p>
                 <strong>Mortar Grid:</strong> 04200240<br>
                 <strong>Target Grid:</strong> 04300270<br>
-                <strong>Ammo:</strong> HE<br>
-                <strong>Charge:</strong> 0<br>
-                <strong>Range:</strong> ~316 meters<br>
-                <strong>Direction:</strong> 328 mils<br>
-                <strong>Elevation:</strong> 1126 mils<br>
-                <strong>Time of Flight:</strong> 12.1s<br>
+                <strong>Ammo:</strong> HE
             </p>
+            <p>
+                <strong>Calculated Range:</strong> ~316 meters<br>
+                <strong>Direction:</strong> 1778 mils (100.00°)<br>
+                <strong>Elevation:</strong> 1534 mils<br>
+                <strong>Charge:</strong> 3
+            </p>
+            <p>This means you should fire using Charge 3 with elevation set at 1534 mils. Adjust for dispersion after observing the impact.</p>
         </div>
     </div>
 
@@ -243,265 +254,300 @@
         </table>
     </div>
 
+    <div class="section" style="grid-column: 1;">
+        <h3>How are Elevation and Time of Flight Calculated?</h3>
+        <p>
+            Accurate mortar fire requires adjusting for elevation differences between the mortar and the target. This calculator uses firing tables to make these adjustments automatically.
+        </p>
+        <ul>
+            <li>
+                <strong>Elevation Adjustment:</strong>
+                <br>
+                The difference in elevation between the target and mortar is multiplied by a table factor (<code>dElevPer100mDR</code>) to fine-tune the firing elevation.
+                <br>
+                <em>Example:</em> If the target is 20m higher than the mortar and the table factor is 15, the adjustment is <code>(20 / 100) × 15 = 3 mils</code>.
+            </li>
+            <li>
+                <strong>Time of Flight Adjustment:</strong>
+                <br>
+                The calculator also adjusts the time of flight using the elevation difference and a table factor (<code>tofPer100mDR</code>).
+                <br>
+                <em>Example:</em> If the target is 20m higher and the table factor is 0.1, the adjustment is <code>(20 / 100) × 0.1 = 0.02 seconds</code>.
+            </li>
+            <li>
+                <strong>Table Factors:</strong>
+                <br>
+                <code>dElevPer100mDR</code>: Elevation change per 100m elevation difference.<br>
+                <code>tofPer100mDR</code>: Time of flight change per 100m elevation difference.
+            </li>
+            <li>
+                If no adjustment factor is available, the base table value is used.
+            </li>
+        </ul>
+        <details>
+            <summary>Show full calculation formula</summary>
+            <pre>
+                Elevation Adjustment = (Target Elevation - Mortar Elevation) / 100 × dElevPer100mDR
+                Time of Flight Adjustment = (Target Elevation - Mortar Elevation) / 100 × tofPer100mDR
+        </pre>
+        </details>
+    </div>
+
 
     <script>
-        let originalFireSolution = null;
-        let cumulativeAngleOffset = 0; // radians
-        let cumulativeRangeOffset = 0; // meters
         const firingTables = {
             HE: {
                 0: [
-                    { range: 50, elevation: 1540, tof: 13.2 },
-                    { range: 100, elevation: 1479, tof: 13.2 },
-                    { range: 150, elevation: 1413, tof: 13 },
-                    { range: 200, elevation: 1350, tof: 12.8 },
-                    { range: 250, elevation: 1279, tof: 12.6 },
-                    { range: 300, elevation: 1201, tof: 12.3 },
-                    { range: 350, elevation: 1106, tof: 11.7 },
-                    { range: 400, elevation: 955, tof: 10.7 }
+                    { range: 50, elevation: 1540, tof: 13.2, dElevPer100mDR: 61, tofPer100mDR: null },
+                    { range: 100, elevation: 1479, tof: 13.2, dElevPer100mDR: 63, tofPer100mDR: 0.2 },
+                    { range: 150, elevation: 1413, tof: 13.0, dElevPer100mDR: 66, tofPer100mDR: 0.2 },
+                    { range: 200, elevation: 1350, tof: 12.8, dElevPer100mDR: 71, tofPer100mDR: 0.2 },
+                    { range: 250, elevation: 1279, tof: 12.6, dElevPer100mDR: 78, tofPer100mDR: 0.3 },
+                    { range: 300, elevation: 1201, tof: 12.3, dElevPer100mDR: 95, tofPer100mDR: 0.6 },
+                    { range: 350, elevation: 1106, tof: 11.7, dElevPer100mDR: 151, tofPer100mDR: 1 },
+                    { range: 400, elevation: 955, tof: 10.7, dElevPer100mDR: null, tofPer100mDR: null }
                 ],
                 1: [
-                    { range: 100, elevation: 1547, tof: 20 },
-                    { range: 200, elevation: 1492, tof: 19.9 },
-                    { range: 300, elevation: 1437, tof: 19.7 },
-                    { range: 400, elevation: 1378, tof: 19.5 },
-                    { range: 500, elevation: 1317, tof: 19.2 },
-                    { range: 600, elevation: 1249, tof: 18.8 },
-                    { range: 700, elevation: 1174, tof: 18.3 },
-                    { range: 800, elevation: 1085, tof: 17.5 },
-                    { range: 900, elevation: 954, tof: 16.1 }
+                    { range: 100, elevation: 1547, tof: 20.0, dElevPer100mDR: 28, tofPer100mDR: 0.1 },
+                    { range: 200, elevation: 1492, tof: 19.9, dElevPer100mDR: 27, tofPer100mDR: 0.1 },
+                    { range: 300, elevation: 1437, tof: 19.7, dElevPer100mDR: 29, tofPer100mDR: 0.1 },
+                    { range: 400, elevation: 1378, tof: 19.5, dElevPer100mDR: 31, tofPer100mDR: 0.1 },
+                    { range: 500, elevation: 1317, tof: 19.2, dElevPer100mDR: 33, tofPer100mDR: 0.2 },
+                    { range: 600, elevation: 1249, tof: 18.8, dElevPer100mDR: 35, tofPer100mDR: 0.2 },
+                    { range: 700, elevation: 1174, tof: 18.3, dElevPer100mDR: 42, tofPer100mDR: 0.4 },
+                    { range: 800, elevation: 1085, tof: 17.5, dElevPer100mDR: 57, tofPer100mDR: 0.6 },
+                    { range: 900, elevation: 954, tof: 16.1, dElevPer100mDR: 148, tofPer100mDR: 1.8 }
                 ],
                 2: [
-                    { range: 200, elevation: 1538, tof: 26.6 },
-                    { range: 300, elevation: 1507, tof: 26.5 },
-                    { range: 400, elevation: 1475, tof: 26.4 },
-                    { range: 500, elevation: 1443, tof: 26.3 },
-                    { range: 600, elevation: 1410, tof: 26.2 },
-                    { range: 700, elevation: 1376, tof: 26 },
-                    { range: 800, elevation: 1341, tof: 25.8 },
-                    { range: 900, elevation: 1305, tof: 25.5 },
-                    { range: 1000, elevation: 1266, tof: 25.2 },
-                    { range: 1100, elevation: 1225, tof: 24.9 },
-                    { range: 1200, elevation: 1180, tof: 24.4 },
-                    { range: 1300, elevation: 1132, tof: 23.9 },
-                    { range: 1400, elevation: 1076, tof: 23.2 },
-                    { range: 1500, elevation: 1009, tof: 22.3 },
-                    { range: 1600, elevation: 912, tof: 20.9 }
+                    { range: 200, elevation: 1538, tof: 26.6, dElevPer100mDR: 15, tofPer100mDR: null },
+                    { range: 300, elevation: 1507, tof: 26.5, dElevPer100mDR: 16, tofPer100mDR: null },
+                    { range: 400, elevation: 1475, tof: 26.4, dElevPer100mDR: 16, tofPer100mDR: null },
+                    { range: 500, elevation: 1443, tof: 26.3, dElevPer100mDR: 16, tofPer100mDR: 0.1 },
+                    { range: 600, elevation: 1410, tof: 26.2, dElevPer100mDR: 16, tofPer100mDR: 0.1 },
+                    { range: 700, elevation: 1376, tof: 26.0, dElevPer100mDR: 17, tofPer100mDR: 0.1 },
+                    { range: 800, elevation: 1341, tof: 25.8, dElevPer100mDR: 18, tofPer100mDR: 0.1 },
+                    { range: 900, elevation: 1305, tof: 25.5, dElevPer100mDR: 20, tofPer100mDR: 0.1 },
+                    { range: 1000, elevation: 1266, tof: 25.2, dElevPer100mDR: 20, tofPer100mDR: 0.1 },
+                    { range: 1100, elevation: 1225, tof: 24.9, dElevPer100mDR: 22, tofPer100mDR: 0.2 },
+                    { range: 1200, elevation: 1180, tof: 24.4, dElevPer100mDR: 23, tofPer100mDR: 0.2 },
+                    { range: 1300, elevation: 1132, tof: 23.9, dElevPer100mDR: 27, tofPer100mDR: 0.3 },
+                    { range: 1400, elevation: 1076, tof: 23.2, dElevPer100mDR: 31, tofPer100mDR: 0.4 },
+                    { range: 1500, elevation: 1009, tof: 22.3, dElevPer100mDR: 43, tofPer100mDR: 0.6 },
+                    { range: 1600, elevation: 912, tof: 20.9, dElevPer100mDR: 109, tofPer100mDR: 1.9 }
                 ],
                 3: [
-                    { range: 300, elevation: 1534, tof: 31.7 },
-                    { range: 400, elevation: 1511, tof: 31.6 },
-                    { range: 500, elevation: 1489, tof: 31.6 },
-                    { range: 600, elevation: 1466, tof: 31.5 },
-                    { range: 700, elevation: 1442, tof: 31.4 },
-                    { range: 800, elevation: 1419, tof: 31.3 },
-                    { range: 900, elevation: 1395, tof: 31.1 },
-                    { range: 1000, elevation: 1370, tof: 31 },
-                    { range: 1100, elevation: 1344, tof: 30.8 },
-                    { range: 1200, elevation: 1318, tof: 30.6 },
-                    { range: 1300, elevation: 1291, tof: 30.3 },
-                    { range: 1400, elevation: 1263, tof: 30.1 },
-                    { range: 1500, elevation: 1233, tof: 29.7 },
-                    { range: 1600, elevation: 1202, tof: 29.4 },
-                    { range: 1700, elevation: 1169, tof: 29 },
-                    { range: 1800, elevation: 1133, tof: 28.5 },
-                    { range: 1900, elevation: 1094, tof: 28 },
-                    { range: 2000, elevation: 1051, tof: 27.3 },
-                    { range: 2100, elevation: 999, tof: 26.5 },
-                    { range: 2200, elevation: 931, tof: 25.3 },
-                    { range: 2300, elevation: 801, tof: 22.7 }
+                    { range: 300, elevation: 1534, tof: 31.7, dElevPer100mDR: 12, tofPer100mDR: null },
+                    { range: 400, elevation: 1511, tof: 31.6, dElevPer100mDR: 11, tofPer100mDR: null },
+                    { range: 500, elevation: 1489, tof: 31.6, dElevPer100mDR: 12, tofPer100mDR: 0.1 },
+                    { range: 600, elevation: 1466, tof: 31.5, dElevPer100mDR: 12, tofPer100mDR: 0.1 },
+                    { range: 700, elevation: 1442, tof: 31.4, dElevPer100mDR: 12, tofPer100mDR: 0.1 },
+                    { range: 800, elevation: 1419, tof: 31.3, dElevPer100mDR: 12, tofPer100mDR: 0.1 },
+                    { range: 900, elevation: 1395, tof: 31.1, dElevPer100mDR: 13, tofPer100mDR: 0.1 },
+                    { range: 1000, elevation: 1370, tof: 31.0, dElevPer100mDR: 13, tofPer100mDR: 0.1 },
+                    { range: 1100, elevation: 1344, tof: 30.8, dElevPer100mDR: 13, tofPer100mDR: 0.1 },
+                    { range: 1200, elevation: 1318, tof: 30.6, dElevPer100mDR: 13, tofPer100mDR: 0.1 },
+                    { range: 1300, elevation: 1291, tof: 30.3, dElevPer100mDR: 14, tofPer100mDR: 0.1 },
+                    { range: 1400, elevation: 1263, tof: 30.1, dElevPer100mDR: 15, tofPer100mDR: 0.2 },
+                    { range: 1500, elevation: 1233, tof: 29.7, dElevPer100mDR: 15, tofPer100mDR: 0.1 },
+                    { range: 1600, elevation: 1202, tof: 29.4, dElevPer100mDR: 16, tofPer100mDR: 0.2 },
+                    { range: 1700, elevation: 1169, tof: 29.0, dElevPer100mDR: 17, tofPer100mDR: 0.2 },
+                    { range: 1800, elevation: 1133, tof: 28.5, dElevPer100mDR: 19, tofPer100mDR: 0.2 },
+                    { range: 1900, elevation: 1094, tof: 28.0, dElevPer100mDR: 21, tofPer100mDR: 0.3 },
+                    { range: 2000, elevation: 1051, tof: 27.3, dElevPer100mDR: 26, tofPer100mDR: 0.4 },
+                    { range: 2100, elevation: 999, tof: 26.5, dElevPer100mDR: 31, tofPer100mDR: 0.5 },
+                    { range: 2200, elevation: 931, tof: 25.3, dElevPer100mDR: 46, tofPer100mDR: 0.9 },
+                    { range: 2300, elevation: 801, tof: 22.7, dElevPer100mDR: null, tofPer100mDR: null }
                 ],
                 4: [
-                    { range: 400, elevation: 1531, tof: 36.3 },
-                    { range: 500, elevation: 1514, tof: 36.2 },
-                    { range: 600, elevation: 1496, tof: 36.2 },
-                    { range: 700, elevation: 1478, tof: 36.1 },
-                    { range: 800, elevation: 1460, tof: 36 },
-                    { range: 900, elevation: 1442, tof: 35.9 },
-                    { range: 1000, elevation: 1424, tof: 35.8 },
-                    { range: 1100, elevation: 1405, tof: 35.7 },
-                    { range: 1200, elevation: 1385, tof: 35.6 },
-                    { range: 1300, elevation: 1366, tof: 35.4 },
-                    { range: 1400, elevation: 1346, tof: 35.3 },
-                    { range: 1500, elevation: 1326, tof: 35.1 },
-                    { range: 1600, elevation: 1305, tof: 34.9 },
-                    { range: 1700, elevation: 1283, tof: 34.6 },
-                    { range: 1800, elevation: 1261, tof: 34.4 },
-                    { range: 1900, elevation: 1238, tof: 34.1 },
-                    { range: 2000, elevation: 1214, tof: 33.8 },
-                    { range: 2100, elevation: 1188, tof: 33.5 },
-                    { range: 2200, elevation: 1162, tof: 33.1 },
-                    { range: 2300, elevation: 1134, tof: 32.7 },
-                    { range: 2400, elevation: 1104, tof: 32.2 },
-                    { range: 2500, elevation: 1070, tof: 31.7 },
-                    { range: 2600, elevation: 1034, tof: 31 },
-                    { range: 2700, elevation: 993, tof: 30.3 },
-                    { range: 2800, elevation: 942, tof: 29.2 },
-                    { range: 2900, elevation: 870, tof: 27.7 }
+                    { range: 400, elevation: 1531, tof: 36.3, dElevPer100mDR: 9, tofPer100mDR: null },
+                    { range: 500, elevation: 1514, tof: 36.2, dElevPer100mDR: 9, tofPer100mDR: null },
+                    { range: 600, elevation: 1496, tof: 36.2, dElevPer100mDR: 9, tofPer100mDR: 0.1 },
+                    { range: 700, elevation: 1478, tof: 36.1, dElevPer100mDR: 9, tofPer100mDR: null },
+                    { range: 800, elevation: 1460, tof: 36.0, dElevPer100mDR: 9, tofPer100mDR: null },
+                    { range: 900, elevation: 1442, tof: 35.9, dElevPer100mDR: 9, tofPer100mDR: null },
+                    { range: 1000, elevation: 1424, tof: 35.8, dElevPer100mDR: 10, tofPer100mDR: null },
+                    { range: 1100, elevation: 1405, tof: 35.7, dElevPer100mDR: 10, tofPer100mDR: 0.1 },
+                    { range: 1200, elevation: 1385, tof: 35.6, dElevPer100mDR: 9, tofPer100mDR: 0.1 },
+                    { range: 1300, elevation: 1366, tof: 35.4, dElevPer100mDR: 10, tofPer100mDR: 0.1 },
+                    { range: 1400, elevation: 1346, tof: 35.3, dElevPer100mDR: 10, tofPer100mDR: 0.1 },
+                    { range: 1500, elevation: 1326, tof: 35.1, dElevPer100mDR: 11, tofPer100mDR: 0.1 },
+                    { range: 1600, elevation: 1305, tof: 34.9, dElevPer100mDR: 11, tofPer100mDR: 0.1 },
+                    { range: 1700, elevation: 1283, tof: 34.6, dElevPer100mDR: 11, tofPer100mDR: 0.1 },
+                    { range: 1800, elevation: 1261, tof: 34.4, dElevPer100mDR: 11, tofPer100mDR: 0.1 },
+                    { range: 1900, elevation: 1238, tof: 34.1, dElevPer100mDR: 12, tofPer100mDR: 0.1 },
+                    { range: 2000, elevation: 1214, tof: 33.8, dElevPer100mDR: 12, tofPer100mDR: 0.1 },
+                    { range: 2100, elevation: 1188, tof: 33.5, dElevPer100mDR: 13, tofPer100mDR: 0.2 },
+                    { range: 2200, elevation: 1162, tof: 33.1, dElevPer100mDR: 14, tofPer100mDR: 0.2 },
+                    { range: 2300, elevation: 1134, tof: 32.7, dElevPer100mDR: 15, tofPer100mDR: 0.2 },
+                    { range: 2400, elevation: 1104, tof: 32.2, dElevPer100mDR: 17, tofPer100mDR: 0.2 },
+                    { range: 2500, elevation: 1070, tof: 31.7, dElevPer100mDR: 17, tofPer100mDR: 0.3 },
+                    { range: 2600, elevation: 1034, tof: 31.0, dElevPer100mDR: 20, tofPer100mDR: 0.3 },
+                    { range: 2700, elevation: 993, tof: 30.3, dElevPer100mDR: 25, tofPer100mDR: 0.5 },
+                    { range: 2800, elevation: 942, tof: 29.2, dElevPer100mDR: 31, tofPer100mDR: 0.6 },
+                    { range: 2900, elevation: 870, tof: 27.7, dElevPer100mDR: 64, tofPer100mDR: 1.5 }
                 ]
             },
             SMOKE: {
                 1: [
-                    { range: 200, elevation: 1463, tof: 17.7 },
-                    { range: 250, elevation: 1427, tof: 17.6 },
-                    { range: 300, elevation: 1391, tof: 17.5 },
-                    { range: 350, elevation: 1352, tof: 17.3 },
-                    { range: 400, elevation: 1314, tof: 17.2 },
-                    { range: 450, elevation: 1271, tof: 16.9 },
-                    { range: 500, elevation: 1227, tof: 16.7 },
-                    { range: 550, elevation: 1178, tof: 16.4 },
-                    { range: 600, elevation: 1124, tof: 16 },
-                    { range: 650, elevation: 1060, tof: 15.4 },
-                    { range: 700, elevation: 982, tof: 14.7 },
-                    { range: 750, elevation: 822, tof: 13 }
+                    { range: 200, elevation: 1463, tof: 17.7, dElevPer100mDR: 36, tofPer100mDR: 0.1 },
+                    { range: 250, elevation: 1427, tof: 17.6, dElevPer100mDR: 36, tofPer100mDR: 0.1 },
+                    { range: 300, elevation: 1391, tof: 17.5, dElevPer100mDR: 39, tofPer100mDR: 0.2 },
+                    { range: 350, elevation: 1352, tof: 17.3, dElevPer100mDR: 38, tofPer100mDR: 0.1 },
+                    { range: 400, elevation: 1314, tof: 17.2, dElevPer100mDR: 43, tofPer100mDR: 0.3 },
+                    { range: 450, elevation: 1271, tof: 16.9, dElevPer100mDR: 44, tofPer100mDR: 0.2 },
+                    { range: 500, elevation: 1227, tof: 16.7, dElevPer100mDR: 49, tofPer100mDR: 0.3 },
+                    { range: 550, elevation: 1178, tof: 16.4, dElevPer100mDR: 54, tofPer100mDR: 0.4 },
+                    { range: 600, elevation: 1124, tof: 16.0, dElevPer100mDR: 64, tofPer100mDR: 0.6 },
+                    { range: 650, elevation: 1060, tof: 15.4, dElevPer100mDR: 78, tofPer100mDR: 0.7 },
+                    { range: 700, elevation: 982, tof: 14.7, dElevPer100mDR: 160, tofPer100mDR: 1.7 },
+                    { range: 750, elevation: 822, tof: 13.0, dElevPer100mDR: null, tofPer100mDR: null }
                 ],
                 2: [
-                    { range: 200, elevation: 1528, tof: 24.8 },
-                    { range: 300, elevation: 1491, tof: 24.7 },
-                    { range: 400, elevation: 1453, tof: 24.6 },
-                    { range: 500, elevation: 1414, tof: 24.4 },
-                    { range: 600, elevation: 1374, tof: 24.2 },
-                    { range: 700, elevation: 1333, tof: 24 },
-                    { range: 800, elevation: 1289, tof: 23.7 },
-                    { range: 900, elevation: 1242, tof: 23.3 },
-                    { range: 1000, elevation: 1191, tof: 22.9 },
-                    { range: 1100, elevation: 1133, tof: 22.3 },
-                    { range: 1200, elevation: 1067, tof: 21.6 },
-                    { range: 1300, elevation: 980, tof: 20.5 },
-                    { range: 1400, elevation: 818, tof: 18 }
+                    { range: 200, elevation: 1528, tof: 24.8, dElevPer100mDR: 19, tofPer100mDR: 0.1 },
+                    { range: 300, elevation: 1491, tof: 24.7, dElevPer100mDR: 19, tofPer100mDR: 0.1 },
+                    { range: 400, elevation: 1453, tof: 24.6, dElevPer100mDR: 19, tofPer100mDR: 0.1 },
+                    { range: 500, elevation: 1414, tof: 24.4, dElevPer100mDR: 19, tofPer100mDR: 0.1 },
+                    { range: 600, elevation: 1374, tof: 24.2, dElevPer100mDR: 20, tofPer100mDR: 0.1 },
+                    { range: 700, elevation: 1333, tof: 24.0, dElevPer100mDR: 22, tofPer100mDR: 0.1 },
+                    { range: 800, elevation: 1289, tof: 23.7, dElevPer100mDR: 23, tofPer100mDR: 0.2 },
+                    { range: 900, elevation: 1242, tof: 23.3, dElevPer100mDR: 25, tofPer100mDR: 0.2 },
+                    { range: 1000, elevation: 1191, tof: 22.9, dElevPer100mDR: 28, tofPer100mDR: 0.3 },
+                    { range: 1100, elevation: 1133, tof: 22.3, dElevPer100mDR: 31, tofPer100mDR: 0.3 },
+                    { range: 1200, elevation: 1067, tof: 21.6, dElevPer100mDR: 39, tofPer100mDR: 0.5 },
+                    { range: 1300, elevation: 980, tof: 20.5, dElevPer100mDR: 58, tofPer100mDR: 0.9 },
+                    { range: 1400, elevation: 818, tof: 18.0, dElevPer100mDR: null, tofPer100mDR: null }
                 ],
                 3: [
-                    { range: 300, elevation: 1522, tof: 29.6 },
-                    { range: 400, elevation: 1495, tof: 29.6 },
-                    { range: 500, elevation: 1468, tof: 29.5 },
-                    { range: 600, elevation: 1440, tof: 29.3 },
-                    { range: 700, elevation: 1412, tof: 29.2 },
-                    { range: 800, elevation: 1383, tof: 29 },
-                    { range: 900, elevation: 1354, tof: 28.9 },
-                    { range: 1000, elevation: 1323, tof: 28.6 },
-                    { range: 1100, elevation: 1291, tof: 28.4 },
-                    { range: 1200, elevation: 1257, tof: 28.1 },
-                    { range: 1300, elevation: 1221, tof: 27.7 },
-                    { range: 1400, elevation: 1183, tof: 27.3 },
-                    { range: 1500, elevation: 1142, tof: 26.8 },
-                    { range: 1600, elevation: 1096, tof: 26.2 },
-                    { range: 1700, elevation: 1044, tof: 25.5 },
-                    { range: 1800, elevation: 980, tof: 24.5 },
-                    { range: 1900, elevation: 892, tof: 23 }
+                    { range: 300, elevation: 1522, tof: 29.6, dElevPer100mDR: 14, tofPer100mDR: null },
+                    { range: 400, elevation: 1495, tof: 29.6, dElevPer100mDR: 14, tofPer100mDR: 0.1 },
+                    { range: 500, elevation: 1468, tof: 29.5, dElevPer100mDR: 14, tofPer100mDR: 0.1 },
+                    { range: 600, elevation: 1440, tof: 29.3, dElevPer100mDR: 14, tofPer100mDR: null },
+                    { range: 700, elevation: 1412, tof: 29.2, dElevPer100mDR: 14, tofPer100mDR: 0.1 },
+                    { range: 800, elevation: 1383, tof: 29.0, dElevPer100mDR: 14, tofPer100mDR: 0.1 },
+                    { range: 900, elevation: 1354, tof: 28.9, dElevPer100mDR: 16, tofPer100mDR: 0.2 },
+                    { range: 1000, elevation: 1323, tof: 28.6, dElevPer100mDR: 16, tofPer100mDR: 0.1 },
+                    { range: 1100, elevation: 1291, tof: 28.4, dElevPer100mDR: 17, tofPer100mDR: 0.2 },
+                    { range: 1200, elevation: 1257, tof: 28.1, dElevPer100mDR: 18, tofPer100mDR: 0.2 },
+                    { range: 1300, elevation: 1221, tof: 27.7, dElevPer100mDR: 18, tofPer100mDR: 0.2 },
+                    { range: 1400, elevation: 1183, tof: 27.3, dElevPer100mDR: 20, tofPer100mDR: 0.2 },
+                    { range: 1500, elevation: 1142, tof: 26.8, dElevPer100mDR: 23, tofPer100mDR: 0.3 },
+                    { range: 1600, elevation: 1096, tof: 26.2, dElevPer100mDR: 25, tofPer100mDR: 0.3 },
+                    { range: 1700, elevation: 1044, tof: 25.5, dElevPer100mDR: 30, tofPer100mDR: 0.5 },
+                    { range: 1800, elevation: 980, tof: 24.5, dElevPer100mDR: 38, tofPer100mDR: 0.6 },
+                    { range: 1900, elevation: 892, tof: 23.0, dElevPer100mDR: 84, tofPer100mDR: 1.5 }
                 ],
                 4: [
-                    { range: 400, elevation: 1517, tof: 33.6 },
-                    { range: 500, elevation: 1495, tof: 33.5 },
-                    { range: 600, elevation: 1474, tof: 33.5 },
-                    { range: 700, elevation: 1452, tof: 33.4 },
-                    { range: 800, elevation: 1429, tof: 33.2 },
-                    { range: 900, elevation: 1407, tof: 33.1 },
-                    { range: 1000, elevation: 1383, tof: 33 },
-                    { range: 1100, elevation: 1360, tof: 32.8 },
-                    { range: 1200, elevation: 1335, tof: 32.6 },
-                    { range: 1300, elevation: 1310, tof: 32.4 },
-                    { range: 1400, elevation: 1284, tof: 32.1 },
-                    { range: 1500, elevation: 1257, tof: 31.9 },
-                    { range: 1600, elevation: 1228, tof: 31.5 },
-                    { range: 1700, elevation: 1199, tof: 31.2 },
-                    { range: 1800, elevation: 1166, tof: 30.8 },
-                    { range: 1900, elevation: 1132, tof: 30.3 },
-                    { range: 2000, elevation: 1096, tof: 29.8 },
-                    { range: 2100, elevation: 1055, tof: 29.1 },
-                    { range: 2200, elevation: 1008, tof: 28.4 },
-                    { range: 2300, elevation: 952, tof: 27.4 },
-                    { range: 2400, elevation: 871, tof: 25.8 }
+                    { range: 400, elevation: 1517, tof: 33.6, dElevPer100mDR: 11, tofPer100mDR: null },
+                    { range: 500, elevation: 1495, tof: 33.5, dElevPer100mDR: 10, tofPer100mDR: null },
+                    { range: 600, elevation: 1474, tof: 33.5, dElevPer100mDR: 11, tofPer100mDR: 0.1 },
+                    { range: 700, elevation: 1452, tof: 33.4, dElevPer100mDR: 11, tofPer100mDR: 0.1 },
+                    { range: 800, elevation: 1429, tof: 33.2, dElevPer100mDR: 11, tofPer100mDR: null },
+                    { range: 900, elevation: 1407, tof: 33.1, dElevPer100mDR: 12, tofPer100mDR: null },
+                    { range: 1000, elevation: 1383, tof: 33.0, dElevPer100mDR: 11, tofPer100mDR: 0.1 },
+                    { range: 1100, elevation: 1360, tof: 32.8, dElevPer100mDR: 12, tofPer100mDR: 0.1 },
+                    { range: 1200, elevation: 1335, tof: 32.6, dElevPer100mDR: 12, tofPer100mDR: 0.1 },
+                    { range: 1300, elevation: 1310, tof: 32.4, dElevPer100mDR: 13, tofPer100mDR: 0.1 },
+                    { range: 1400, elevation: 1284, tof: 32.1, dElevPer100mDR: 14, tofPer100mDR: 0.1 },
+                    { range: 1500, elevation: 1257, tof: 31.9, dElevPer100mDR: 14, tofPer100mDR: 0.2 },
+                    { range: 1600, elevation: 1228, tof: 31.5, dElevPer100mDR: 15, tofPer100mDR: 0.1 },
+                    { range: 1700, elevation: 1199, tof: 31.2, dElevPer100mDR: 17, tofPer100mDR: 0.2 },
+                    { range: 1800, elevation: 1166, tof: 30.8, dElevPer100mDR: 16, tofPer100mDR: 0.2 },
+                    { range: 1900, elevation: 1132, tof: 30.3, dElevPer100mDR: 18, tofPer100mDR: 0.2 },
+                    { range: 2000, elevation: 1096, tof: 29.8, dElevPer100mDR: 21, tofPer100mDR: 0.3 },
+                    { range: 2100, elevation: 1055, tof: 29.1, dElevPer100mDR: 23, tofPer100mDR: 0.3 },
+                    { range: 2200, elevation: 1008, tof: 28.4, dElevPer100mDR: 28, tofPer100mDR: 0.5 },
+                    { range: 2300, elevation: 952, tof: 27.4, dElevPer100mDR: 36, tofPer100mDR: 0.7 },
+                    { range: 2400, elevation: 871, tof: 25.8, dElevPer100mDR: 67, tofPer100mDR: 1.5 }
                 ]
             },
             ILLUMINATION: {
                 1: [
-                    { range: 200, elevation: 1463, tof: 18.1 },
-                    { range: 250, elevation: 1428, tof: 18 },
-                    { range: 300, elevation: 1391, tof: 17.9 },
-                    { range: 350, elevation: 1352, tof: 17.7 },
-                    { range: 400, elevation: 1312, tof: 17.5 },
-                    { range: 450, elevation: 1269, tof: 17.3 },
-                    { range: 500, elevation: 1224, tof: 17 },
-                    { range: 550, elevation: 1175, tof: 16.7 },
-                    { range: 600, elevation: 1120, tof: 16.3 },
-                    { range: 650, elevation: 1055, tof: 15.7 },
-                    { range: 700, elevation: 974, tof: 15 },
-                    { range: 750, elevation: 823, tof: 13.3 }
+                    { range: 200, elevation: 1463, tof: 18.1, dElevPer100mDR: 35, tofPer100mDR: 0.1 },
+                    { range: 250, elevation: 1428, tof: 18.0, dElevPer100mDR: 37, tofPer100mDR: 0.1 },
+                    { range: 300, elevation: 1391, tof: 17.9, dElevPer100mDR: 39, tofPer100mDR: 0.2 },
+                    { range: 350, elevation: 1352, tof: 17.7, dElevPer100mDR: 40, tofPer100mDR: 0.2 },
+                    { range: 400, elevation: 1312, tof: 17.5, dElevPer100mDR: 43, tofPer100mDR: 0.2 },
+                    { range: 450, elevation: 1269, tof: 17.3, dElevPer100mDR: 45, tofPer100mDR: 0.3 },
+                    { range: 500, elevation: 1224, tof: 17.0, dElevPer100mDR: 49, tofPer100mDR: 0.3 },
+                    { range: 550, elevation: 1175, tof: 16.7, dElevPer100mDR: 55, tofPer100mDR: 0.4 },
+                    { range: 600, elevation: 1120, tof: 16.3, dElevPer100mDR: 65, tofPer100mDR: 0.6 },
+                    { range: 650, elevation: 1055, tof: 15.7, dElevPer100mDR: 81, tofPer100mDR: 0.7 },
+                    { range: 700, elevation: 974, tof: 15.0, dElevPer100mDR: 151, tofPer100mDR: 1.7 },
+                    { range: 750, elevation: 823, tof: 13.3, dElevPer100mDR: null, tofPer100mDR: null }
                 ],
                 2: [
-                    { range: 200, elevation: 1529, tof: 26.2 },
-                    { range: 300, elevation: 1493, tof: 26.1 },
-                    { range: 400, elevation: 1457, tof: 26 },
-                    { range: 500, elevation: 1419, tof: 25.8 },
-                    { range: 600, elevation: 1379, tof: 25.6 },
-                    { range: 700, elevation: 1338, tof: 25.4 },
-                    { range: 800, elevation: 1295, tof: 25.1 },
-                    { range: 900, elevation: 1249, tof: 24.7 },
-                    { range: 1000, elevation: 1199, tof: 24.3 },
-                    { range: 1100, elevation: 1144, tof: 23.7 },
-                    { range: 1200, elevation: 1081, tof: 23 },
-                    { range: 1300, elevation: 1005, tof: 22 },
-                    { range: 1400, elevation: 900, tof: 20.5 }
+                    { range: 200, elevation: 1529, tof: 26.2, dElevPer100mDR: 17, tofPer100mDR: 0.1 },
+                    { range: 300, elevation: 1493, tof: 26.1, dElevPer100mDR: 18, tofPer100mDR: 0.1 },
+                    { range: 400, elevation: 1457, tof: 26.0, dElevPer100mDR: 19, tofPer100mDR: 0.1 },
+                    { range: 500, elevation: 1419, tof: 25.8, dElevPer100mDR: 19, tofPer100mDR: 0.1 },
+                    { range: 600, elevation: 1379, tof: 25.6, dElevPer100mDR: 20, tofPer100mDR: 0.1 },
+                    { range: 700, elevation: 1338, tof: 25.4, dElevPer100mDR: 21, tofPer100mDR: 0.2 },
+                    { range: 800, elevation: 1295, tof: 25.1, dElevPer100mDR: 23, tofPer100mDR: 0.2 },
+                    { range: 900, elevation: 1249, tof: 24.7, dElevPer100mDR: 25, tofPer100mDR: 0.2 },
+                    { range: 1000, elevation: 1199, tof: 24.3, dElevPer100mDR: 27, tofPer100mDR: 0.3 },
+                    { range: 1100, elevation: 1144, tof: 23.7, dElevPer100mDR: 30, tofPer100mDR: 0.3 },
+                    { range: 1200, elevation: 1081, tof: 23.0, dElevPer100mDR: 35, tofPer100mDR: 0.4 },
+                    { range: 1300, elevation: 1005, tof: 22.0, dElevPer100mDR: 47, tofPer100mDR: 0.6 },
+                    { range: 1400, elevation: 900, tof: 20.5, dElevPer100mDR: 98, tofPer100mDR: 1.6 }
                 ],
                 3: [
-                    { range: 300, elevation: 1521, tof: 31.1 },
-                    { range: 400, elevation: 1494, tof: 31.1 },
-                    { range: 500, elevation: 1466, tof: 31 },
-                    { range: 600, elevation: 1438, tof: 30.8 },
-                    { range: 700, elevation: 1409, tof: 30.7 },
-                    { range: 800, elevation: 1380, tof: 30.5 },
-                    { range: 900, elevation: 1349, tof: 30.3 },
-                    { range: 1000, elevation: 1317, tof: 30.1 },
-                    { range: 1100, elevation: 1284, tof: 29.8 },
-                    { range: 1200, elevation: 1249, tof: 29.4 },
-                    { range: 1300, elevation: 1212, tof: 29.1 },
-                    { range: 1400, elevation: 1172, tof: 28.6 },
-                    { range: 1500, elevation: 1128, tof: 28.1 },
-                    { range: 1600, elevation: 1081, tof: 27.4 },
-                    { range: 1700, elevation: 1027, tof: 26.6 },
-                    { range: 1800, elevation: 962, tof: 25.6 },
-                    { range: 1900, elevation: 875, tof: 24.1 }
+                    { range: 300, elevation: 1521, tof: 31.1, dElevPer100mDR: 14, tofPer100mDR: null },
+                    { range: 400, elevation: 1494, tof: 31.1, dElevPer100mDR: 14, tofPer100mDR: 0.1 },
+                    { range: 500, elevation: 1466, tof: 31.0, dElevPer100mDR: 14, tofPer100mDR: 0.1 },
+                    { range: 600, elevation: 1438, tof: 30.8, dElevPer100mDR: 14, tofPer100mDR: null },
+                    { range: 700, elevation: 1409, tof: 30.7, dElevPer100mDR: 14, tofPer100mDR: 0.1 },
+                    { range: 800, elevation: 1380, tof: 30.5, dElevPer100mDR: 16, tofPer100mDR: 0.1 },
+                    { range: 900, elevation: 1349, tof: 30.3, dElevPer100mDR: 16, tofPer100mDR: 0.1 },
+                    { range: 1000, elevation: 1317, tof: 30.1, dElevPer100mDR: 16, tofPer100mDR: 0.2 },
+                    { range: 1100, elevation: 1284, tof: 29.8, dElevPer100mDR: 18, tofPer100mDR: 0.2 },
+                    { range: 1200, elevation: 1249, tof: 29.4, dElevPer100mDR: 19, tofPer100mDR: 0.2 },
+                    { range: 1300, elevation: 1212, tof: 29.1, dElevPer100mDR: 20, tofPer100mDR: 0.3 },
+                    { range: 1400, elevation: 1172, tof: 28.6, dElevPer100mDR: 21, tofPer100mDR: 0.2 },
+                    { range: 1500, elevation: 1128, tof: 28.1, dElevPer100mDR: 22, tofPer100mDR: 0.3 },
+                    { range: 1600, elevation: 1081, tof: 27.4, dElevPer100mDR: 26, tofPer100mDR: 0.3 },
+                    { range: 1700, elevation: 1027, tof: 26.6, dElevPer100mDR: 30, tofPer100mDR: 0.4 },
+                    { range: 1800, elevation: 962, tof: 25.6, dElevPer100mDR: 39, tofPer100mDR: 0.7 },
+                    { range: 1900, elevation: 875, tof: 24.1, dElevPer100mDR: 67, tofPer100mDR: 1.3 }
                 ],
                 4: [
-                    { range: 400, elevation: 1515, tof: 35.7 },
-                    { range: 500, elevation: 1493, tof: 35.7 },
-                    { range: 600, elevation: 1471, tof: 35.6 },
-                    { range: 700, elevation: 1448, tof: 35.5 },
-                    { range: 800, elevation: 1426, tof: 35.4 },
-                    { range: 900, elevation: 1402, tof: 35.2 },
-                    { range: 1000, elevation: 1378, tof: 35 },
-                    { range: 1100, elevation: 1353, tof: 34.8 },
-                    { range: 1200, elevation: 1328, tof: 34.6 },
-                    { range: 1300, elevation: 1301, tof: 34.4 },
-                    { range: 1400, elevation: 1274, tof: 34.1 },
-                    { range: 1500, elevation: 1245, tof: 33.8 },
-                    { range: 1600, elevation: 1215, tof: 33.4 },
-                    { range: 1700, elevation: 1184, tof: 33 },
-                    { range: 1800, elevation: 1151, tof: 32.6 },
-                    { range: 1900, elevation: 1115, tof: 32.1 },
-                    { range: 2000, elevation: 1076, tof: 31.5 },
-                    { range: 2100, elevation: 1033, tof: 30.8 },
-                    { range: 2200, elevation: 985, tof: 29.9 },
-                    { range: 2300, elevation: 928, tof: 28.8 },
-                    { range: 2400, elevation: 855, tof: 27.4 }
+                    { range: 400, elevation: 1515, tof: 35.7, dElevPer100mDR: 11, tofPer100mDR: null },
+                    { range: 500, elevation: 1493, tof: 35.7, dElevPer100mDR: 11, tofPer100mDR: 0.1 },
+                    { range: 600, elevation: 1471, tof: 35.6, dElevPer100mDR: 11, tofPer100mDR: 0.1 },
+                    { range: 700, elevation: 1448, tof: 35.5, dElevPer100mDR: 11, tofPer100mDR: 0.1 },
+                    { range: 800, elevation: 1426, tof: 35.4, dElevPer100mDR: 12, tofPer100mDR: 0.1 },
+                    { range: 900, elevation: 1402, tof: 35.2, dElevPer100mDR: 12, tofPer100mDR: 0.1 },
+                    { range: 1000, elevation: 1378, tof: 35.0, dElevPer100mDR: 12, tofPer100mDR: 0.1 },
+                    { range: 1100, elevation: 1353, tof: 34.8, dElevPer100mDR: 13, tofPer100mDR: 0.1 },
+                    { range: 1200, elevation: 1328, tof: 34.6, dElevPer100mDR: 13, tofPer100mDR: 0.1 },
+                    { range: 1300, elevation: 1301, tof: 34.4, dElevPer100mDR: 14, tofPer100mDR: 0.2 },
+                    { range: 1400, elevation: 1274, tof: 34.1, dElevPer100mDR: 14, tofPer100mDR: 0.1 },
+                    { range: 1500, elevation: 1245, tof: 33.8, dElevPer100mDR: 15, tofPer100mDR: 0.2 },
+                    { range: 1600, elevation: 1215, tof: 33.4, dElevPer100mDR: 15, tofPer100mDR: 0.1 },
+                    { range: 1700, elevation: 1184, tof: 33.0, dElevPer100mDR: 17, tofPer100mDR: 0.2 },
+                    { range: 1800, elevation: 1151, tof: 32.6, dElevPer100mDR: 18, tofPer100mDR: 0.3 },
+                    { range: 1900, elevation: 1115, tof: 32.1, dElevPer100mDR: 19, tofPer100mDR: 0.3 },
+                    { range: 2000, elevation: 1076, tof: 31.5, dElevPer100mDR: 21, tofPer100mDR: 0.4 },
+                    { range: 2100, elevation: 1033, tof: 30.8, dElevPer100mDR: 23, tofPer100mDR: 0.4 },
+                    { range: 2200, elevation: 985, tof: 29.9, dElevPer100mDR: 27, tofPer100mDR: 0.5 },
+                    { range: 2300, elevation: 928, tof: 28.8, dElevPer100mDR: 33, tofPer100mDR: 0.6 },
+                    { range: 2400, elevation: 855, tof: 27.4, dElevPer100mDR: 52, tofPer100mDR: 1.1 }
                 ]
             }
         };
-
         function addLogEntry(data) {
             const container = document.getElementById('logContainer');
             const entry = document.createElement('div');
             entry.className = 'log-entry';
             const timestamp = new Date().toLocaleString();
             entry.innerHTML = `
-                  <strong>[${timestamp}]</strong><br>
-                  ${data.replace(/\n/g, '<br>')}
-                  <div class="log-buttons">
-                    <button onclick="replayMission(this)">Replay</button>
-                    <button onclick="copyToClipboard(this)">Copy</button>
-                    <button onclick="deleteLogEntry(this)">Delete</button>
-                  </div>
-                `;
+                              <strong>[${timestamp}]</strong><br>
+                              ${data.replace(/\n/g, '<br>')}
+                              <div class="log-buttons">
+                                <button onclick="replayMission(this)">Replay</button>
+                                <button onclick="copyToClipboard(this)">Copy</button>
+                                <button onclick="deleteLogEntry(this)">Delete</button>
+                              </div>
+                            `;
             container.prepend(entry);
         }
 
@@ -567,7 +613,13 @@
                     const ratio = (range - low.range) / (high.range - low.range);
                     return {
                         elevation: Math.round(low.elevation + ratio * (high.elevation - low.elevation)),
-                        tof: parseFloat((low.tof + ratio * (high.tof - low.tof)).toFixed(1))
+                        tof: parseFloat((low.tof + ratio * (high.tof - low.tof)).toFixed(1)),
+                        dElevPer100mDR: low.dElevPer100mDR !== null && high.dElevPer100mDR !== null
+                            ? low.dElevPer100mDR + ratio * (high.dElevPer100mDR - low.dElevPer100mDR)
+                            : null,
+                        tofPer100mDR: low.tofPer100mDR !== null && high.tofPer100mDR !== null
+                            ? low.tofPer100mDR + ratio * (high.tofPer100mDR - low.tofPer100mDR)
+                            : null
                     };
                 }
             }
@@ -602,6 +654,7 @@
 
             const mortarGrid = document.getElementById('mortarPos').value.trim();
             const targetGrid = document.getElementById('targetPos').value.trim();
+            plotOnMap(mortarGrid, targetGrid);
             const ammoType = document.getElementById('ammoType').value.toUpperCase();
             const mortarPos = gridToMeters(mortarGrid);
             const targetPos = gridToMeters(targetGrid);
@@ -625,23 +678,15 @@
                 return;
             }
 
-            if (!isNaN(mortarElev) && !isNaN(targetElev)) {
-                const verticalAdjustment = Math.round((targetElev - mortarElev) * 1.5);
+            const elevDiff = mortarElev - targetElev;
+            if (typeof interp.dElevPer100mDR === 'number' && !isNaN(interp.dElevPer100mDR)) {
+                const verticalAdjustment = Math.round((elevDiff / 100) * interp.dElevPer100mDR);
                 interp.elevation += verticalAdjustment;
             }
-            const dx = targetPos.x - mortarPos.x;
-            const dy = targetPos.y - mortarPos.y;
-            const baseAngleRad = Math.atan2(dx, dy);
-            const baseDistance = Math.sqrt(dx * dx + dy * dy);
 
-            originalFireSolution = {
-                mortarPos: { x: mortarPos.x, y: mortarPos.y },
-                baseAngleRad: baseAngleRad,
-                baseDistance: baseDistance,
-                mortarGrid: mortarGrid
-            };
-            cumulativeAngleOffset = 0;
-            cumulativeRangeOffset = 0;
+            if (typeof interp.tofPer100mDR === 'number' && !isNaN(interp.tofPer100mDR)) {
+                interp.tof += (elevDiff / 100) * interp.tofPer100mDR;
+            }
 
             const direction = calculateDirection(mortarPos, targetPos);
             const degrees = (direction * 360 / 6400).toFixed(2);
@@ -651,16 +696,16 @@
             const opt5 = document.getElementById('opt5');
 
             let result = `Mortar Grid: ${mortarGrid}
-                Target Grid: ${targetGrid}
-                Ammo: ${ammoType}
-                Charge: ${charge}
-                Range: ${range} meters
-                Direction: ${direction} mils`;
+                            Target Grid: ${targetGrid}
+                            Ammo: ${ammoType}
+                            Charge: ${charge}
+                            Range: ${range} meters
+                            Direction: ${direction} mils`;
             if (opt2 && opt2.checked) result += `(${degrees}°)`;
             if (opt3 && opt3.checked) result += `${bearing}`;
             result += `
-                Elevation: ${interp.elevation} mils
-                Time of Flight: ${interp.tof}s`;
+                            Elevation: ${interp.elevation} mils
+                            Time of Flight: ${interp.tof}s`;
 
             addLogEntry(`[RANGING SHOT]\n${result}`);
         }
@@ -722,53 +767,49 @@
                     }
                 }
             }
-            // Prefer last correction, else last ranging shot, else current input
-            return lastCorrection || lastRanging || {
-                mortarGrid: document.getElementById('mortarPos').value.trim(),
-                targetGrid: document.getElementById('targetPos').value.trim()
-            };
+            // Prefer last correction, else last ranging shot, else nulls
+            return lastCorrection || lastRanging || { mortarGrid: '', targetGrid: '' };
         }
 
         function applySpotterCorrection() {
             const direction = document.getElementById('correctionDir').value;
             const value = parseInt(document.getElementById('correctionValue').value);
 
-            if (!originalFireSolution) {
-                alert('No ranging shot found. Please calculate a fire mission first.');
+            // Use last correction if available, else last ranging shot, else current input
+            const { mortarGrid, targetGrid } = getLastLogBaseGrids();
+            const baseMortarGrid = mortarGrid || document.getElementById('mortarPos').value.trim();
+            const baseTargetGrid = targetGrid || document.getElementById('targetPos').value.trim();
+
+            const mortarPos = gridToMeters(baseMortarGrid);
+            const targetPos = gridToMeters(baseTargetGrid);
+
+            const dx = targetPos.x - mortarPos.x;
+            const dy = targetPos.y - mortarPos.y;
+            const baseDistance = Math.sqrt(dx * dx + dy * dy);
+            const baseAngleRad = Math.atan2(dx, dy);
+
+            if (value > baseDistance) {
+                alert("Correction value exceeds distance to target — too large for angle adjustment.");
+                return;
+            }
+            if (isNaN(value)) {
+                alert('Enter a valid correction value.');
                 return;
             }
 
-            const mortarPos = originalFireSolution.mortarPos;
-            let baseAngleRad = originalFireSolution.baseAngleRad;
-            let baseDistance = originalFireSolution.baseDistance;
+            let correctedDistance = baseDistance;
+            let correctedAngleRad = baseAngleRad;
 
-            // Validate
-            if (isNaN(value) || value <= 0) {
-                alert('Enter a valid positive correction value.');
-                return;
-            }
-            if ((direction === 'L' || direction === 'R') && value > baseDistance * 0.5) {
-                alert("Correction value is too large for the distance. Use a smaller correction.");
-                return;
-            }
-
-            // Apply cumulative corrections
-            let milChange = 0;
-            let angleRadOffset = 0;
             if (direction === 'L' || direction === 'R') {
-                milChange = value / baseDistance * 1000;
-                angleRadOffset = (milChange * Math.PI) / 3200;
-                cumulativeAngleOffset += (direction === 'R' ? angleRadOffset : -angleRadOffset);
+                const angleRadOffset = Math.atan(value / baseDistance);
+                correctedAngleRad = baseAngleRad + (direction === 'L' ? angleRadOffset : -angleRadOffset);
             } else if (direction === 'A') {
-                cumulativeRangeOffset += value;
+                correctedDistance = baseDistance + value;
             } else if (direction === 'D') {
-                cumulativeRangeOffset -= value;
+                correctedDistance = baseDistance - value;
             }
 
-            // Calculate new impact point
-            const correctedAngleRad = baseAngleRad + cumulativeAngleOffset;
-            const correctedDistance = baseDistance + cumulativeRangeOffset;
-
+            // Calculate new target position for display
             const newDx = Math.cos(correctedAngleRad) * correctedDistance;
             const newDy = Math.sin(correctedAngleRad) * correctedDistance;
             const newX = Math.round(mortarPos.x + newDx);
@@ -780,6 +821,7 @@
             if (correctedMils < 0) correctedMils += 6400;
 
             const ammoType = document.getElementById('ammoType').value.toUpperCase();
+            // Auto-select charge for the corrected distance
             const charge = autoSelectCharge(ammoType, Math.round(correctedDistance));
             const firingTable = firingTables[ammoType]?.[charge];
             const interp = interpolate(firingTable, Math.round(correctedDistance));
@@ -787,18 +829,18 @@
             const mortarElev = parseInt(document.getElementById('mortarElev').value);
             const targetElev = parseInt(document.getElementById('targetElev').value);
 
-            if (!isNaN(mortarElev) && !isNaN(targetElev) && interp) {
-                const verticalAdjustment = Math.round((targetElev - mortarElev) * 1.5);
+            if (!isNaN(mortarElev) && !isNaN(targetElev) && interp && typeof interp.dElevPer100mDR === 'number' && !isNaN(interp.dElevPer100mDR)) {
+                const elevDiff = targetElev - mortarElev;
+                const verticalAdjustment = Math.round((elevDiff / 100) * interp.dElevPer100mDR);
                 interp.elevation += verticalAdjustment;
             }
 
-            let output = `Mortar Grid: ${originalFireSolution.mortarGrid}\n`;
-            output += `Base Target Grid: ${newGrid}\n`;
-            output += `Base Range: ${Math.round(correctedDistance)}m, Direction: ${correctedMils} mils\n`;
+            let output = `Mortar Grid: ${baseMortarGrid}\n`;
+            output += `Base Target Grid: ${baseTargetGrid}\n`;
+            output += `Base Range: ${Math.round(baseDistance)}m, Direction: ${calculateDirection(mortarPos, targetPos)} mils\n`;
 
             if (direction === 'L' || direction === 'R') {
-                const milChangeDisplay = Math.round(milChange);
-                output += `Correction: ${direction} ${value}m (${milChangeDisplay} mils)\n`;
+                output += `Correction: ${direction} ${value}m\n`;
                 output += `New Direction: ${correctedMils} mils\n`;
                 output += `Charge: ${charge}\n`;
                 output += `Adjusted Target Grid: ${newGrid}`;
@@ -847,6 +889,65 @@
                     });
             });
         }
+
+        // Set up a 10km x 10km grid (adjust as needed for your map size)
+        const mapBounds = [[0, 0], [10000, 10000]]; // [y, x] in meters
+
+        const map = L.map('map', {
+            crs: L.CRS.Simple,
+            minZoom: -2,
+            maxZoom: 2
+        }).setView([5000, 5000], 0);
+
+        L.rectangle(mapBounds, { color: "#feda6a", weight: 1, fill: false }).addTo(map);
+        map.fitBounds(mapBounds);
+
+        L.imageOverlay('anizay.png', mapBounds).addTo(map);
+
+        function drawGrid(spacing = 1000) {
+            for (let x = 0; x <= 10000; x += spacing) {
+                L.polyline([[0, x], [10000, x]], { color: '#feda6a', weight: 1, opacity: 0.3 }).addTo(map);
+            }
+            for (let y = 0; y <= 10000; y += spacing) {
+                L.polyline([[y, 0], [y, 10000]], { color: '#feda6a', weight: 1, opacity: 0.3 }).addTo(map);
+            }
+        }
+        drawGrid(1000); // 1km grid lines
+
+        function gridToLatLng(grid) {
+            // 8-digit grid: first 4 digits easting, last 4 digits northing, each *10 for meters
+            const easting = parseInt(grid.slice(0, 4)) * 10;
+            const northing = parseInt(grid.slice(4, 8)) * 10;
+            return [northing, easting]; // [y, x] for CRS.Simple
+        }
+
+        let mapMarkers = [];
+        let mapTrajectory = null;
+
+        function plotOnMap(mortarGrid, targetGrid) {
+            // Remove old markers/lines
+            mapMarkers.forEach(m => map.removeLayer(m));
+            mapMarkers = [];
+            if (mapTrajectory) {
+                map.removeLayer(mapTrajectory);
+                mapTrajectory = null;
+            }
+
+            const mortarLatLng = gridToLatLng(mortarGrid);
+            const targetLatLng = gridToLatLng(targetGrid);
+
+            // Add markers
+            mapMarkers.push(L.marker(mortarLatLng, { title: "Mortar" }).addTo(map).bindPopup('Mortar'));
+            mapMarkers.push(L.marker(targetLatLng, { title: "Target" }).addTo(map).bindPopup('Target'));
+
+            // Draw trajectory (straight line)
+            mapTrajectory = L.polyline([mortarLatLng, targetLatLng], { color: 'red', weight: 2 }).addTo(map);
+
+            // Optionally, fit map to show both points
+            map.fitBounds([mortarLatLng, targetLatLng], { padding: [50, 50] });
+        }
+
+
     </script>
 </body>
 </html>
